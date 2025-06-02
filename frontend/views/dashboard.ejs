@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <form id="scan-form">
+  <label>Target URL:</label>
+  <input type="text" name="url" required />
+
+  <label><input type="checkbox" id="enable-dos"> Aktifkan DoS</label>
+<div id="dos-options" style="display:none;">
+  <label>Jumlah Request:</label>
+  <input type="number" name="requests_num" />
+  <label>Durasi (detik):</label>
+  <input type="number" name="duration" />
+  <label>Ukuran Paket (byte):</label>
+  <input type="number" name="packet_size" />
+  <label>Header Cookie (opsional):</label>
+  <input type="text" name="cookie_header" placeholder="PHPSESSID=xyz" />
+</div>
+  <button type="submit">Mulai Pengujian</button>
+</form>
+<div id="status"></div>
+<div id="result-area"></div>
+
+</body>
+</html>
+
+<script>
+  document.getElementById('enable-dos').addEventListener('change', function() {
+    document.getElementById('dos-options').style.display = this.checked ? 'block' : 'none';
+  });
+  
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('scan-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+      const jsonData = Object.fromEntries(formData.entries());
+      jsonData.dos_enabled = document.getElementById('enable-dos').checked;
+
+      document.getElementById('status').innerText = 'Menjalankan pengujian...';
+
+      try {
+        const res = await fetch('/test/scan-all', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(jsonData)
+        });
+        
+        const text = await res.text();
+        document.getElementById('status').innerText = 'Selesai';
+        document.getElementById('result-area').innerText = text;
+        
+        console.log('Sending data:', jsonData);
+        console.log('Response:', text);
+        
+      } catch (err) {
+        document.getElementById('status').innerText = 'Gagal mengirim data.';
+        console.error(err);
+      }
+    });
+  });
+  
+
+</script>

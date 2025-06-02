@@ -1,0 +1,21 @@
+{
+	"scripts": {
+		"start": "nodemon ./backend/app.js",
+		"dev": "npx nodemon ./backend/app.js",
+		"build": "echo 'No build step required for this project'",
+		"test": "echo 'No test step required for this project'"
+	},
+	"dependencies": {
+		"bcryptjs": "^3.0.2",
+		"cors": "^2.8.5",
+		"dotenv": "^16.5.0",
+		"ejs": "^3.1.10",
+		"express": "^5.1.0",
+		"express-session": "^1.18.1",
+		"multer": "^2.0.0",
+		"mysql2": "^3.14.1",
+		"nodemon": "^3.1.10",
+		"pdfkit": "^0.17.1",
+		"puppeteer": "^24.9.0"
+	}
+}

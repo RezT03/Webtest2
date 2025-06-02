@@ -3,8 +3,8 @@
 > Aplikasi web komprehensif untuk melakukan pengujian keamanan website dengan berbagai teknik dan metodologi penetration testing.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Security Rating](https://img.shields.io/badge/Security-A+-green.svg)](https://github.com/yourusername/websecguard)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/yourusername/websecguard)
+[![Security Rating](https://img.shields.io/badge/Security-A+-green.svg)](https://github.com/RezT03/Websec2)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/RezT03/Websec2)
 
 ## 🎯 Tentang Aplikasi
 

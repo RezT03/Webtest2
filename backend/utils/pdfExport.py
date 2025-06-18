@@ -1,21 +1,27 @@
+from sqlite3 import Cursor
 from fpdf import FPDF
 import datetime
 import re
+import json, sys
 
-if __name__ == '__main__':
-    import json, sys
-    results = json.load(open(sys.argv[1]))
-    export_to_pdf(results, sys.argv[2])
 
-def export_to_pdf(results, filename='hasil_uji.pdf'):
+
+def export_to_pdf(results, filename='hasil_uji.pdf', user_id=None, cursor=None):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font('Arial', 'B', 14)
     pdf.cell(200, 10, 'Laporan Pengujian Keamanan', ln=True, align='C')
     pdf.set_font('Arial', '', 12)
     
-    cursor.execute("SELECT * FROM test_results WHERE user_id = %s AND test_type = 'DoS'", (user_id,))
-    dos_results = cursor.fetchall()
+    if __name__ == '__main__':
+        results = json.load(open(sys.argv[1]))
+        export_to_pdf(results, sys.argv[2])
+    
+    if user_id is not None and cursor is not None:
+        cursor.execute("SELECT * FROM test_results WHERE user_id = ? AND test_type = 'DoS'", (user_id,))
+        dos_results = cursor.fetchall()
+    else:
+        dos_results = []
     if dos_results:
         pdf.add_page()
         pdf.set_font('Arial', 'B', 12)

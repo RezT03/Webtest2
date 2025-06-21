@@ -306,3 +306,7 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
+
+#test results
+scan_results/
+last_page_source.html

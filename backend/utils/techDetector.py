@@ -332,24 +332,6 @@ def normalize_software(raw):
         return f"{name} {version}"
     return raw
 
-def normalize_cpe(name, version):
-    """Convert software name & version to CPE format"""
-    # Remove 'v' prefix from version if exists
-    version = version.lower().replace('v', '')
-    
-    # Map common names to CPE names
-    cpe_mappings = {
-        'apache': 'apache:http_server',
-        'php': 'php:php',
-        'openssl': 'openssl:openssl',
-        'jquery': 'jquery:jquery',
-        'perl': 'perl:perl',
-        'mod_perl': 'apache:mod_perl'
-    }
-    
-    vendor_product = cpe_mappings.get(name.lower(), f"{name}:{name}")
-    return f"cpe:2.3:a:{vendor_product}:{version}:*:*:*:*:*:*:*"
-
 def search_cve_by_cpe(software_name, version_str):
     original_name = software_name
     software_name = software_name.lower()
@@ -433,6 +415,20 @@ def search_cve_by_cpe(software_name, version_str):
     except Exception as e:
         logging.error(f"Gagal fetch CVE: {str(e)}")
         return []
+    
+def search_cves_list(techs):
+    logging.info("\nMencari CVE untuk teknologi yang terdeteksi...")
+    all_cves = []
+    for tech in techs:
+        try:
+            logging.info(f"\n📊 Analyzing: {tech}")
+            cves = search_cve(tech)
+            if cves:
+                all_cves.extend(cves)
+                logging.info(f"✅ Found {len(cves)} CVE(s):")
+        except Exception as e:
+            logging.info(f"❌ Error saat mencari CVE untuk {tech}: {e}")
+    return all_cves
 
 def search_cves_combined(software_list):
     all_cves = []
@@ -452,15 +448,15 @@ if __name__ == '__main__':
     try:
         # Validasi argumen
         if len(sys.argv) < 2:
-            print("Error: URL tidak diberikan")
-            print("Penggunaan: python techDetector.py <url>")
+            logging.info("Error: URL tidak diberikan")
+            logging.info("Penggunaan: python techDetector.py <url>")
             sys.exit(1)
 
         target = sys.argv[1]
         if not target.startswith(('http://', 'https://')):
             target = 'http://' + target
 
-        print(f"🔍 Mendeteksi teknologi pada: {target}")
+        logging.info(f"🔍 Mendeteksi teknologi pada: {target}")
         logging.info(f"Memulai scan pada: {target}")
 
         # Deteksi teknologi
@@ -468,44 +464,44 @@ if __name__ == '__main__':
         all_cves = []
         
         if not techs:
-            print("❌ Tidak ada teknologi yang terdeteksi.")
+            logging.info("❌ Tidak ada teknologi yang terdeteksi.")
             logging.warning("Tidak ada teknologi yang berhasil dideteksi.")
             sys.exit(0)
         
-        print("\n✅ Teknologi terdeteksi:")
+        logging.info("\n✅ Teknologi terdeteksi:")
         for tech in techs:
-            print(f"   • {tech}")
+            logging.info(f"   • {tech}")
 
         # Cari CVE untuk setiap teknologi
-        print("\n🔍 Mencari CVE untuk teknologi yang terdeteksi...")
+        logging.info("\n🔍 Mencari CVE untuk teknologi yang terdeteksi...")
         for tech in techs:
             try:
-                print(f"\n📊 Analyzing: {tech}")
+                logging.info(f"\n📊 Analyzing: {tech}")
                 cves = search_cve(tech)
                 if cves:
                     all_cves.extend(cves)
-                    print(f"   Found {len(cves)} CVE(s):")
+                    logging.info(f"   Found {len(cves)} CVE(s):")
                     for c in cves:
-                        print(f"\n   • {c['cve_id']}")
-                        print(f"     Description: {c['description']}")
-                        print(f"     Solution: {c['solution']}")
+                        logging.info(f"\n   • {c['cve_id']}")
+                        logging.info(f"     Description: {c['description']}")
+                        logging.info(f"     Solution: {c['solution']}")
                 else:
-                    print(f"   ✓ No CVEs found for {tech}")
+                    logging.info(f"   ✓ No CVEs found for {tech}")
             except Exception as e:
                 logging.error(f"Error scanning {tech}: {str(e)}")
-                print(f"   ⚠️ Error scanning {tech}")
+                logging.info(f"   ⚠️ Error scanning {tech}")
                 continue
 
         # Summary
-        print(f"\n📝 Summary:")
-        print(f"   • Technologies detected: {len(techs)}")
-        print(f"   • Total CVEs found: {len(all_cves)}")
+        logging.info(f"\n📝 Summary:")
+        logging.info(f"   • Technologies detected: {len(techs)}")
+        logging.info(f"   • Total CVEs found: {len(all_cves)}")
 
     except KeyboardInterrupt:
-        print("\n⚠️ Scan cancelled by user")
+        logging.info("\n⚠️ Scan cancelled by user")
         logging.warning("Scan dibatalkan oleh user")
         sys.exit(1)
     except Exception as e:
         logging.error(f"Critical error: {str(e)}")
-        print(f"\n❌ Error: {str(e)}")
+        logging.info(f"\n❌ Error: {str(e)}")
         sys.exit(1)

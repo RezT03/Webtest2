@@ -12,7 +12,6 @@ def solve_captcha(image_path):
     except:
         return None
 
-
 if __name__ == '__main__':
     import sys
     image = sys.argv[1]

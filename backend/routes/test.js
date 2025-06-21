@@ -1,45 +1,102 @@
-const express = require('express');
-const router = express.Router();
-const { exec } = require('child_process');
-const path = require('path');
-const db = require('../config/db');
-const fs = require('fs');
-const moment = require('moment')
+const express = require("express")
+const router = express.Router()
+const { spawn } = require("child_process")
+const path = require("path")
+const db = require("../config/db")
 
+// GET dashboard tanpa hasil uji (kosong sampai user submit)
+router.get("/dashboard", (req, res) => {
+	res.render("dashboard", {
+		xss_results: [],
+		sqli_results: [],
+		tech: [],
+		cves: [],
+		zap_alerts: [],
+		dos_summary: "",
+	})
+})
 
-router.post('/scan-all', async (req, res) => {
-  const { url, dos_enabled, requests_num, duration, packet_size } = req.body;
-  const userId = req.session.userId || 1;
-  const resultLogs = [];
+// POST /test/scan-all: Jalankan pengujian dan kirim JSON ke frontend
+router.post("/scan-all", async (req, res) => {
+	const {
+		url,
+		dos_enabled,
+		requests_num,
+		duration,
+		packet_size,
+		cookie_header,
+	} = req.body
+	const userId = req.session?.userId || 1
+	const resultLogs = []
 
-  const execPython = (script, args = [], label = '') => {
-    return new Promise((resolve) => {
-      exec(`python3 ${path.join(__dirname, '../utils', script)} ${args.join(' ')}`, (err, stdout) => {
-        resultLogs.push(`--- ${label} ---\n${stdout}`);
-        resolve();
-      });
-    });
-  };
+	try {
+		const scanPath = path.join(__dirname, "../utils/scan_all.py")
+		const args = [scanPath, url]
 
-  // Run all scan processes
-  await execPython("misConfig.py", [url], "Server Misconfiguration")
-  await execPython('techDetector.py', [url], 'CVE/Software Detection');
-  await execPython("xss-sqli-tester.py", [url], "XSS and SQL Injection Test");
+		if (dos_enabled === "true" || dos_enabled === true) {
+			args.push("--dos_enabled")
+			args.push(`--requests_num=${requests_num || 100}`)
+			args.push(`--duration=${duration || 10}`)
+			args.push(`--packet_size=${packet_size || 1024}`)
+		}
 
- if (dos_enabled === 'true') {
-  const headerString = req.body.cookie_header ? `Cookie: ${req.body.cookie_header}` : null;
-  await execPython('dosTester.py', [url, requests_num || 100, duration || 10, packet_size || 1024, headerString || ''], 'DoS Test');
-}
+		const process = spawn("python3", args)
+		let stdout = ""
+		let stderr = ""
 
-  // Log to DB
-  await db.query('INSERT INTO test_results (user_id, test_type, target_url, request_payload, result, summary) VALUES (?, ?, ?, ?, ?, ?)', [
-    userId, 'scan-all', url,
-    JSON.stringify(req.body),
-    resultLogs.join('\n\n'),
-    'Hasil gabungan pengujian keamanan'
-  ]);
+		process.stdout.on("data", (data) => (stdout += data))
+		process.stderr.on("data", (data) => (stderr += data))
 
-  res.send(resultLogs.join('\n\n'));
-});
+		process.on("close", async () => {
+			if (stderr) {
+				console.error(stderr)
+			}
+			if (!stdout || !stdout.trim().startsWith("{")) {
+				console.error("Output Python tidak valid:", stdout)
+				return res
+					.status(500)
+					.json({ error: "Scan gagal atau output tidak valid." })
+			}
+			try {
+				const parsed = JSON.parse(stdout)
 
-module.exports = router;
+				// filter & urutkan hasil ZAP
+				const riskLevel = { Low: 1, Medium: 2, High: 3 }
+				if (Array.isArray(parsed.zap_alerts)) {
+					parsed.zap_alerts = parsed.zap_alerts
+						.filter((a) => ["Low", "Medium", "High"].includes(a.risk))
+						.sort((a, b) => riskLevel[b.risk] - riskLevel[a.risk])
+				}
+
+				await db.query(
+					"INSERT INTO test_results (user_id, test_type, target_url, request_payload, result, summary) VALUES (?, ?, ?, ?, ?, ?)",
+					[
+						userId,
+						"scan-all",
+						url,
+						JSON.stringify(req.body),
+						JSON.stringify(parsed),
+						"Hasil pengujian keamanan",
+					],
+				)
+
+				res.json({
+					xss_results: parsed.xss_results,
+					sqli_results: parsed.sqli_results,
+					tech: parsed.tech,
+					cves: parsed.cves,
+					zap_alerts: parsed.zap_alerts,
+					dos_summary: parsed.dos_summary,
+				})
+			} catch (e) {
+				console.error("Gagal parsing hasil JSON:", e.message)
+				res.status(500).json({ error: "Gagal parsing hasil JSON." })
+			}
+		})
+	} catch (err) {
+		console.error(err)
+		res.status(500).send("Terjadi kesalahan saat menjalankan pengujian.")
+	}
+})
+
+module.exports = router

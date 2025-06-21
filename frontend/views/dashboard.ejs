@@ -1,71 +1,312 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
-</head>
-<body>
-  <form id="scan-form">
-  <label>Target URL:</label>
-  <input type="text" name="url" required />
+	<head>
+		<meta charset="UTF-8" />
+		<title>Dashboard Pengujian Keamanan</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				padding: 20px;
+			}
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				margin-top: 20px;
+			}
+			th,
+			td {
+				border: 1px solid #ccc;
+				padding: 8px;
+				text-align: left;
+			}
+			th {
+				background-color: #f2f2f2;
+			}
+			h2 {
+				margin-top: 40px;
+			}
+			form {
+				margin-bottom: 40px;
+			}
+			label {
+				display: block;
+				margin-top: 10px;
+			}
+			input[type="text"] {
+				width: 100%;
+				padding: 8px;
+				margin-top: 5px;
+			}
+			button {
+				margin-top: 15px;
+				padding: 10px 20px;
+				background-color: #4081f2;
+				color: white;
+				border: none;
+				cursor: pointer;
+			}
+			button:hover {
+				background-color: #2f66c7;
+			}
+			#progress {
+				display: none;
+				margin-top: 20px;
+				background-color: #eee;
+				border-radius: 5px;
+				overflow: hidden;
+				height: 20px;
+			}
+			#progress-bar {
+				height: 100%;
+				width: 0%;
+				background-color: #4081f2;
+				transition: width 0.3s;
+			}
+		</style>
+		<script>
+			function toggleDosOptions() {
+				const dosOptions = document.getElementById("dos-options")
+				dosOptions.style.display = document.getElementById("enable-dos").checked
+					? "block"
+					: "none"
+			}
 
-  <label><input type="checkbox" id="enable-dos"> Aktifkan DoS</label>
-<div id="dos-options" style="display:none;">
-  <label>Jumlah Request:</label>
-  <input type="number" name="requests_num" />
-  <label>Durasi (detik):</label>
-  <input type="number" name="duration" />
-  <label>Ukuran Paket (byte):</label>
-  <input type="number" name="packet_size" />
-  <label>Header Cookie (opsional):</label>
-  <input type="text" name="cookie_header" placeholder="PHPSESSID=xyz" />
-</div>
-  <button type="submit">Mulai Pengujian</button>
-</form>
-<div id="status"></div>
-<div id="result-area"></div>
+			async function runScan(event) {
+				event.preventDefault()
+				document.getElementById("progress").style.display = "block"
+				document.getElementById("progress-bar").style.width = "5%"
 
-</body>
+				const form = document.getElementById("scan-form")
+				const formData = new FormData(form)
+				const jsonData = Object.fromEntries(formData.entries())
+				jsonData.dos_enabled = document.getElementById("enable-dos").checked
+
+				try {
+					document.getElementById("progress-bar").style.width = "20%"
+					const response = await fetch("/test/scan-all", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(jsonData),
+					})
+					document.getElementById("progress-bar").style.width = "90%"
+					const result = await response.json()
+
+					// Render hasil ZAP Alerts vertikal
+					let html = ""
+					if (result.zap_alerts && result.zap_alerts.length > 0) {
+						// Group by risk+alert
+						const grouped = {}
+						result.zap_alerts.forEach((a) => {
+							const key = a.risk + "|" + a.alert
+							if (!grouped[key]) grouped[key] = { ...a, urls: [] }
+							grouped[key].urls.push(a.url)
+						})
+						function getBgColor(risk) {
+							if (risk === "High") return "#ffcaca"
+							if (risk === "Medium") return "#fff4c2"
+							return "#d0e7ff"
+						}
+						html += `<h2>Hasil Pemindaian OWASP ZAP</h2>`
+						Object.values(grouped).forEach((alert) => {
+							html += `<table style="background-color:${getBgColor(
+								alert.risk,
+							)};margin-bottom:20px;border-radius:8px;width:100%;max-width:700px;">
+								<tr><th style="width:150px;">Risk</th><td>[${alert.risk}] ${
+								alert.alert
+							}</td></tr>
+								<tr><th>Deskripsi</th><td>${alert.desc}</td></tr>
+								<tr><th>Solusi</th><td>${alert.solution}</td></tr>
+								<tr><th>URL</th><td>${alert.urls
+									.map((u, i) => `URL ${i + 1}: ${u}`)
+									.join("<br>")}</td></tr>
+								${alert.param ? `<tr><th>Parameter</th><td>${alert.param}</td></tr>` : ""}
+							</table>`
+						})
+					}
+
+					// Render hasil CVE vertikal
+					if (result.cves && result.cves.length > 0) {
+						html += `<h2>Daftar CVE Terkait</h2>`
+						result.cves.forEach((cve) => {
+							html += `<table style="background-color:#f2f2f2;margin-bottom:20px;border-radius:8px;width:100%;max-width:700px;">
+								<tr><th style="width:150px;">ID</th><td>${cve.id || cve.cve_id}</td></tr>
+								<tr><th>Deskripsi</th><td>${cve.desc || cve.description}</td></tr>
+								<tr><th>Solusi</th><td>${cve.solution || ""}</td></tr>
+							</table>`
+						})
+					}
+
+					// Tambahkan render untuk tech, xss_results, sqli_results jika ingin
+
+					document.getElementById("scan-result").innerHTML =
+						html || "<i>Tidak ada hasil.</i>"
+				} catch (err) {
+					alert("Gagal menjalankan pengujian: " + err.message)
+				} finally {
+					document.getElementById("progress-bar").style.width = "100%"
+				}
+			}
+		</script>
+		<script src="/js/dashboard.js"></script>
+	</head>
+	<body>
+		<h1>Dashboard Pengujian Keamanan Web</h1>
+
+		<form id="scan-form" onsubmit="runScan(event)">
+			<label for="url">URL Target:</label>
+			<input
+				type="text"
+				name="url"
+				id="url"
+				placeholder="http://localhost:3000"
+				required
+			/>
+
+			<label>
+				<input
+					type="checkbox"
+					id="enable-dos"
+					name="enable_dos"
+					onclick="toggleDosOptions()"
+				/>
+				Aktifkan Pengujian DoS
+			</label>
+
+			<div id="dos-options" style="display: none">
+				<label>
+					Jumlah Request:
+					<input type="text" name="requests_num" placeholder="Contoh: 500" />
+				</label>
+				<label>
+					Durasi Serangan (detik):
+					<input type="text" name="duration" placeholder="Contoh: 10" />
+				</label>
+				<label>
+					Ukuran Paket (byte):
+					<input type="text" name="packet_size" placeholder="Contoh: 1024" />
+				</label>
+			</div>
+
+			<button type="submit">Mulai Pengujian</button>
+		</form>
+
+		<div id="progress">
+			<div id="progress-bar"></div>
+		</div>
+
+		<div id="scan-result"></div>
+
+		<% if (xss_results && xss_results.length > 0) { %>
+		<h2>Hasil Pengujian XSS</h2>
+		<table>
+			<tr>
+				<th>No</th>
+				<th>Payload</th>
+				<th>Hasil</th>
+			</tr>
+			<% xss_results.forEach((x, i) => { %>
+			<tr>
+				<td><%= i+1 %></td>
+				<td><%= x.payload %></td>
+				<td><%= x.result %></td>
+			</tr>
+			<% }) %>
+		</table>
+		<% } %> <% if (sqli_results && sqli_results.length > 0) { %>
+		<h2>Hasil Pengujian SQL Injection</h2>
+		<table>
+			<tr>
+				<th>No</th>
+				<th>Payload</th>
+				<th>Hasil</th>
+			</tr>
+			<% sqli_results.forEach((s, i) => { %>
+			<tr>
+				<td><%= i+1 %></td>
+				<td><%= s.payload %></td>
+				<td><%= s.result %></td>
+			</tr>
+			<% }) %>
+		</table>
+		<% } %> <% if (tech && tech.length > 0) { %>
+		<h2>Teknologi yang Terdeteksi</h2>
+		<ul>
+			<% tech.forEach(t => { %>
+			<li><%= t %></li>
+			<% }) %>
+		</ul>
+		<% } %> <% if (cves && cves.length > 0) { %>
+		<h2>Daftar CVE Terkait</h2>
+		<% cves.forEach((cve, i) => { %>
+		<table
+			style="
+				background-color: #f2f2f2;
+				margin-bottom: 20px;
+				border-radius: 8px;
+				width: 100%;
+				max-width: 700px;
+			"
+		>
+			<tr>
+				<th style="width: 150px">ID</th>
+				<td><%= cve.id %></td>
+			</tr>
+			<tr>
+				<th>Deskripsi</th>
+				<td><%= cve.desc %></td>
+			</tr>
+			<tr>
+				<th>Solusi</th>
+				<td><%= cve.solution %></td>
+			</tr>
+		</table>
+		<% }) %> <% } %> <% if (zap_alerts && zap_alerts.length > 0) { %>
+		<h2>Hasil Pemindaian OWASP ZAP</h2>
+		<% // Group alerts by alert name and risk const grouped = {};
+		zap_alerts.forEach(a => { const key = a.risk + '|' + a.alert; if
+		(!grouped[key]) grouped[key] = { ...a, urls: [] };
+		grouped[key].urls.push(a.url); }); function getBgColor(risk) { if (risk ===
+		'High') return '#ffcaca'; if (risk === 'Medium') return '#fff4c2'; return
+		'#d0e7ff'; } Object.values(grouped).forEach((alert, idx) => { %>
+		<table
+			style="
+				background-color: <%= getBgColor(alert.risk) %>;
+				margin-bottom: 20px;
+				border-radius: 8px;
+				width: 100%;
+				max-width: 700px;""
+			<tr>
+				<th style="width: 150px">Risk</th>
+				<td>[<%= alert.risk %>] <%= alert.alert %></td>
+			</tr>
+			<tr>
+				<th>Deskripsi</th>
+				<td><%= alert.desc %></td>
+			</tr>
+			<tr>
+				<th>Solusi</th>
+				<td><%= alert.solution %></td>
+			</tr>
+			<tr>
+				<th>URL</th>
+				<td>
+					<% alert.urls.forEach((u, i) => { %>
+					<div>URL <%= i+1 %>: <%= u %></div>
+					<% }) %>
+				</td>
+			</tr>
+			<% if (alert.param) { %>
+			<tr>
+				<th>Parameter</th>
+				<td><%= alert.param %></td>
+			</tr>
+			<% } %>
+		</table>
+		<% }) %> <% } else { %>
+		<!-- <p><i>⚠️ Tidak ada kerentanan dari ZAP yang terdeteksi.</i></p> -->
+		<% } %> <% if (dos_summary) { %>
+		<h2>Ringkasan Pengujian DoS</h2>
+		<p><%= dos_summary %></p>
+		<% } %>
+	</body>
 </html>
-
-<script>
-  document.getElementById('enable-dos').addEventListener('change', function() {
-    document.getElementById('dos-options').style.display = this.checked ? 'block' : 'none';
-  });
-  
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('scan-form').addEventListener('submit', async function (e) {
-      e.preventDefault();
-
-      const formData = new FormData(this);
-      const jsonData = Object.fromEntries(formData.entries());
-      jsonData.dos_enabled = document.getElementById('enable-dos').checked;
-
-      document.getElementById('status').innerText = 'Menjalankan pengujian...';
-
-      try {
-        const res = await fetch('/test/scan-all', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(jsonData)
-        });
-        
-        const text = await res.text();
-        document.getElementById('status').innerText = 'Selesai';
-        document.getElementById('result-area').innerText = text;
-        
-        console.log('Sending data:', jsonData);
-        console.log('Response:', text);
-        
-      } catch (err) {
-        document.getElementById('status').innerText = 'Gagal mengirim data.';
-        console.error(err);
-      }
-    });
-  });
-  
-
-</script>

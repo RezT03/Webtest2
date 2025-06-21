@@ -9,16 +9,17 @@ const dashboardRoutes = require("./routes/dashboard")
 const testRoutes = require("./routes/test")
 const historyRoutes = require("./routes/history")
 
+
 const app = express()
 
-console.log('Starting server...');
+console.log('Starting server...')
 
-app.use(express.static(path.join(__dirname, '../frontend/public')));
-console.log('Static middleware set');
+app.use(express.static(path.join(__dirname, '../frontend/public')))
+console.log('Static middleware set')
 
-app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, '../frontend/views'));
-console.log('View engine configured');
+app.set("view engine", "ejs")
+app.set("views", path.join(__dirname, '../frontend/views'))
+console.log('View engine configured')
 
 app.use(bodyParser.urlencoded({ extended: false }))
 app.use(bodyParser.json())
@@ -32,19 +33,19 @@ app.use(
 
 //DEV.BYPASS.LOGIN
 app.use((req, res, next) => {
-  req.session.userId = 1; 
-  next();
-});
+  req.session.userId = 1 
+  next()
+})
 //DEL.ON.PROD
 
-app.use("/", authRoutes)
+app.use("/", dashboardRoutes)
 app.use("/dashboard", dashboardRoutes)
 app.use("/test", testRoutes)
 app.use("/history", historyRoutes)
-console.log('All routes configured');
+console.log('All routes configured')
 
 app.listen(3001, () => {
-    console.log("Server running on http://localhost:3001");
+    console.log("Server running on http://localhost:3001")
 })
 
 module.exports = app

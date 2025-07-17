@@ -5,7 +5,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-def extract_form_parameters(url):
+def detect_form(url):
     try:
         r = requests.get(url, timeout=5)
         soup = BeautifulSoup(r.text, 'html.parser')

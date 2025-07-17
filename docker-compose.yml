@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app/backend
+    environment:
+      - NODE_ENV=production
+    networks:
+      - webnet
+    
+  zap:
+    image: zaproxy/zap-stable
+    command: zap.sh -daemon -host 0.0.0.0 -port 8090 -config api.disablekey=true
+    ports:
+      - "8090:8090"
+    networks:
+      - webnet
+
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:80"
+    restart: always
+    networks:
+      - webnet
+
+networks:
+  webnet:

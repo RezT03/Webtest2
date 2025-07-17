@@ -1,0 +1,7 @@
+requests
+beautifulsoup4
+selenium
+python-dotenv
+packaging
+PyPDF2
+python-owasp-zap-v2.4

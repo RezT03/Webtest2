@@ -61,7 +61,7 @@ def search_cve(software_entry):
         # Query NVD API
         params = {
             "cpeName": cpe,
-            "resultsPerPage": 10
+            # "resultsPerPage": 10
         }
         headers = {"Accept": "application/json"}
         if NVD_API_KEY:
@@ -89,6 +89,20 @@ def search_cve(software_entry):
                 cve_id = cve.get("id")
                 descriptions = cve.get("descriptions", [])
                 desc = next((d.get("value", "") for d in descriptions if d.get("lang") == "en"), "")
+
+                # --- Ambil CVSS Score ---
+                cvss_score = None
+                cvss_version = None
+                metrics = cve.get("metrics", {})
+                if "cvssMetricV31" in metrics:
+                    cvss_score = metrics["cvssMetricV31"][0]["cvssData"]["baseScore"]
+                    cvss_version = "3.1"
+                elif "cvssMetricV30" in metrics:
+                    cvss_score = metrics["cvssMetricV30"][0]["cvssData"]["baseScore"]
+                    cvss_version = "3.0"
+                elif "cvssMetricV2" in metrics:
+                    cvss_score = metrics["cvssMetricV2"][0]["cvssData"]["baseScore"]
+                    cvss_version = "2.0"
 
                 if not cve_id or not desc:
                     continue
@@ -124,6 +138,8 @@ def search_cve(software_entry):
                     results.append({
                         "cve_id": cve_id,
                         "description": desc,
+                        "cvss_score": cvss_score,
+                        "cvss_version": cvss_version,
                         "software": software_entry,
                         "solution": generate_generic_solution(desc)
                     })
@@ -139,7 +155,7 @@ def search_cve(software_entry):
         return []
 
 def fetch_cve(cpe_name):
-    url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cpeName={cpe_name}&resultsPerPage=10"
+    url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cpeName={cpe_name}"
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -349,7 +365,7 @@ def search_cve_by_cpe(software_name, version_str):
     try:
         params = {
             "cpeName": cpe,
-            "resultsPerPage": 20
+            # "resultsPerPage": 20
         }
         headers = {
             "Accept": "application/json"
@@ -444,6 +460,21 @@ def search_cves_combined(software_list):
             all_cves.extend(cves)
     return all_cves
 
+def cvss_to_grade(cvss_list):
+    if not cvss_list:
+        return "A"
+    max_cvss = max([s for s in cvss_list if s is not None] or [0])
+    if max_cvss >= 9:
+        return "E"
+    elif max_cvss >= 7:
+        return "D"
+    elif max_cvss >= 4:
+        return "C"
+    elif max_cvss > 0:
+        return "B"
+    else:
+        return "A"
+
 if __name__ == '__main__':
     try:
         # Validasi argumen
@@ -497,6 +528,16 @@ if __name__ == '__main__':
         logging.info(f"   • Technologies detected: {len(techs)}")
         logging.info(f"   • Total CVEs found: {len(all_cves)}")
 
+        cvss_scores = [cve.get("cvss_score") for cve in all_cves if cve.get("cvss_score") is not None]
+        grade = cvss_to_grade(cvss_scores)
+        logging.info(f"Penilaian keamanan berdasarkan CVSS: {grade}")
+
+        # OUTPUT JSON KE STDOUT
+        output = {
+            "tech": techs,
+            "cves": all_cves
+        }
+        print(json.dumps(output, ensure_ascii=False))
     except KeyboardInterrupt:
         logging.info("\n⚠️ Scan cancelled by user")
         logging.warning("Scan dibatalkan oleh user")

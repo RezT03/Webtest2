@@ -1,312 +1,99 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 	<head>
 		<meta charset="UTF-8" />
-		<title>Dashboard Pengujian Keamanan</title>
-		<style>
-			body {
-				font-family: Arial, sans-serif;
-				padding: 20px;
-			}
-			table {
-				width: 100%;
-				border-collapse: collapse;
-				margin-top: 20px;
-			}
-			th,
-			td {
-				border: 1px solid #ccc;
-				padding: 8px;
-				text-align: left;
-			}
-			th {
-				background-color: #f2f2f2;
-			}
-			h2 {
-				margin-top: 40px;
-			}
-			form {
-				margin-bottom: 40px;
-			}
-			label {
-				display: block;
-				margin-top: 10px;
-			}
-			input[type="text"] {
-				width: 100%;
-				padding: 8px;
-				margin-top: 5px;
-			}
-			button {
-				margin-top: 15px;
-				padding: 10px 20px;
-				background-color: #4081f2;
-				color: white;
-				border: none;
-				cursor: pointer;
-			}
-			button:hover {
-				background-color: #2f66c7;
-			}
-			#progress {
-				display: none;
-				margin-top: 20px;
-				background-color: #eee;
-				border-radius: 5px;
-				overflow: hidden;
-				height: 20px;
-			}
-			#progress-bar {
-				height: 100%;
-				width: 0%;
-				background-color: #4081f2;
-				transition: width 0.3s;
-			}
-		</style>
-		<script>
-			function toggleDosOptions() {
-				const dosOptions = document.getElementById("dos-options")
-				dosOptions.style.display = document.getElementById("enable-dos").checked
-					? "block"
-					: "none"
-			}
-
-			async function runScan(event) {
-				event.preventDefault()
-				document.getElementById("progress").style.display = "block"
-				document.getElementById("progress-bar").style.width = "5%"
-
-				const form = document.getElementById("scan-form")
-				const formData = new FormData(form)
-				const jsonData = Object.fromEntries(formData.entries())
-				jsonData.dos_enabled = document.getElementById("enable-dos").checked
-
-				try {
-					document.getElementById("progress-bar").style.width = "20%"
-					const response = await fetch("/test/scan-all", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(jsonData),
-					})
-					document.getElementById("progress-bar").style.width = "90%"
-					const result = await response.json()
-
-					// Render hasil ZAP Alerts vertikal
-					let html = ""
-					if (result.zap_alerts && result.zap_alerts.length > 0) {
-						// Group by risk+alert
-						const grouped = {}
-						result.zap_alerts.forEach((a) => {
-							const key = a.risk + "|" + a.alert
-							if (!grouped[key]) grouped[key] = { ...a, urls: [] }
-							grouped[key].urls.push(a.url)
-						})
-						function getBgColor(risk) {
-							if (risk === "High") return "#ffcaca"
-							if (risk === "Medium") return "#fff4c2"
-							return "#d0e7ff"
-						}
-						html += `<h2>Hasil Pemindaian OWASP ZAP</h2>`
-						Object.values(grouped).forEach((alert) => {
-							html += `<table style="background-color:${getBgColor(
-								alert.risk,
-							)};margin-bottom:20px;border-radius:8px;width:100%;max-width:700px;">
-								<tr><th style="width:150px;">Risk</th><td>[${alert.risk}] ${
-								alert.alert
-							}</td></tr>
-								<tr><th>Deskripsi</th><td>${alert.desc}</td></tr>
-								<tr><th>Solusi</th><td>${alert.solution}</td></tr>
-								<tr><th>URL</th><td>${alert.urls
-									.map((u, i) => `URL ${i + 1}: ${u}`)
-									.join("<br>")}</td></tr>
-								${alert.param ? `<tr><th>Parameter</th><td>${alert.param}</td></tr>` : ""}
-							</table>`
-						})
-					}
-
-					// Render hasil CVE vertikal
-					if (result.cves && result.cves.length > 0) {
-						html += `<h2>Daftar CVE Terkait</h2>`
-						result.cves.forEach((cve) => {
-							html += `<table style="background-color:#f2f2f2;margin-bottom:20px;border-radius:8px;width:100%;max-width:700px;">
-								<tr><th style="width:150px;">ID</th><td>${cve.id || cve.cve_id}</td></tr>
-								<tr><th>Deskripsi</th><td>${cve.desc || cve.description}</td></tr>
-								<tr><th>Solusi</th><td>${cve.solution || ""}</td></tr>
-							</table>`
-						})
-					}
-
-					// Tambahkan render untuk tech, xss_results, sqli_results jika ingin
-
-					document.getElementById("scan-result").innerHTML =
-						html || "<i>Tidak ada hasil.</i>"
-				} catch (err) {
-					alert("Gagal menjalankan pengujian: " + err.message)
-				} finally {
-					document.getElementById("progress-bar").style.width = "100%"
-				}
-			}
-		</script>
-		<script src="/js/dashboard.js"></script>
+		<title>Dashboard</title>
+		<link rel="stylesheet" href="/css/style.css" />
+		<link
+			href="https://fonts.googleapis.com/css?family=Poppins:400,600&display=swap"
+			rel="stylesheet"
+		/>
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
 	</head>
 	<body>
-		<h1>Dashboard Pengujian Keamanan Web</h1>
-
-		<form id="scan-form" onsubmit="runScan(event)">
-			<label for="url">URL Target:</label>
-			<input
-				type="text"
-				name="url"
-				id="url"
-				placeholder="http://localhost:3000"
-				required
-			/>
-
-			<label>
+		<div class="container">
+			<h1>Dashboard Pengujian Keamanan Web</h1>
+			<form id="scan-form" action="/test/scan-all" method="POST">
+				<label for="url">Target URL:</label>
 				<input
-					type="checkbox"
-					id="enable-dos"
-					name="enable_dos"
-					onclick="toggleDosOptions()"
+					type="text"
+					name="url"
+					id="url"
+					required
+					placeholder="http://localhost"
 				/>
-				Aktifkan Pengujian DoS
-			</label>
+				<br />
+				<label>
+					<input type="checkbox" id="enable-dos" name="dos_enabled" />
+					Aktifkan DoS Attack
+				</label>
+				<div id="dos-options" style="display: none; margin-top: 10px">
+					<label for="dos_method">Metode DoS:</label>
+					<select name="dos_method" id="dos_method">
+						<option value="slowloris">Slowloris (Slow Headers)</option>
+						<option value="slowread">Slow Read</option>
+						<option value="rudy">RUDY (Slow POST)</option>
+						<option value="slowpost">Slow POST</option>
+					</select>
+					<small>Pilih teknik serangan DoS yang akan digunakan.</small>
+					<br />
 
-			<div id="dos-options" style="display: none">
-				<label>
-					Jumlah Request:
-					<input type="text" name="requests_num" placeholder="Contoh: 500" />
-				</label>
-				<label>
-					Durasi Serangan (detik):
-					<input type="text" name="duration" placeholder="Contoh: 10" />
-				</label>
-				<label>
-					Ukuran Paket (byte):
-					<input type="text" name="packet_size" placeholder="Contoh: 1024" />
-				</label>
+					<label for="requests_num">Jumlah Request:</label>
+					<input type="number" name="requests_num" id="requests_num" />
+					<small>Banyaknya request yang akan dikirim ke server.</small>
+					<br />
+
+					<label for="duration">Durasi (detik):</label>
+					<input type="number" name="duration" id="duration" />
+					<small>Lama waktu pengujian DoS dalam detik.</small>
+					<br />
+
+					<label for="connections_per_page">Jumlah Koneksi per Page:</label>
+					<input
+						type="number"
+						name="connections_per_page"
+						id="connections_per_page"
+						value="100"
+					/>
+					<small>Jumlah koneksi simultan ke server.</small>
+					<br />
+
+					<label for="packet_size">Ukuran Paket (bytes):</label>
+					<input type="number" name="packet_size" id="packet_size" />
+					<button type="button" id="auto-packet-size">Auto</button>
+					<small>
+						Klik "Auto" untuk mengisi otomatis berdasarkan ukuran halaman
+						target.
+					</small>
+					<br />
+
+					<label for="cookie_header">Header Cookie (Opsional):</label>
+					<input type="text" name="cookie_header" id="cookie_header" />
+					<small>Isi jika aplikasi butuh autentikasi/session.</small>
+					<br />
+
+					<label>
+						<input type="checkbox" id="stop-on-down" name="stop_on_down" />
+						Stop on Down
+					</label>
+					<small>Berhenti otomatis jika server terdeteksi down.</small>
+					<br />
+				</div>
+				<button type="submit">Mulai Pengujian</button>
+			</form>
+			<div id="progress-container">
+				<div id="progress-bar">0%</div>
 			</div>
-
-			<button type="submit">Mulai Pengujian</button>
-		</form>
-
-		<div id="progress">
-			<div id="progress-bar"></div>
+			<div
+				id="progress-status"
+				style="margin-top: 8px; color: #555; font-size: 1em"
+			></div>
+			<div id="scan-result"></div>
+			<div id="dos-graph" style="max-width: 800px; margin: 0 auto">
+				<canvas id="dosChart" style="height: 350px; max-width: 100%"></canvas>
+			</div>
 		</div>
-
-		<div id="scan-result"></div>
-
-		<% if (xss_results && xss_results.length > 0) { %>
-		<h2>Hasil Pengujian XSS</h2>
-		<table>
-			<tr>
-				<th>No</th>
-				<th>Payload</th>
-				<th>Hasil</th>
-			</tr>
-			<% xss_results.forEach((x, i) => { %>
-			<tr>
-				<td><%= i+1 %></td>
-				<td><%= x.payload %></td>
-				<td><%= x.result %></td>
-			</tr>
-			<% }) %>
-		</table>
-		<% } %> <% if (sqli_results && sqli_results.length > 0) { %>
-		<h2>Hasil Pengujian SQL Injection</h2>
-		<table>
-			<tr>
-				<th>No</th>
-				<th>Payload</th>
-				<th>Hasil</th>
-			</tr>
-			<% sqli_results.forEach((s, i) => { %>
-			<tr>
-				<td><%= i+1 %></td>
-				<td><%= s.payload %></td>
-				<td><%= s.result %></td>
-			</tr>
-			<% }) %>
-		</table>
-		<% } %> <% if (tech && tech.length > 0) { %>
-		<h2>Teknologi yang Terdeteksi</h2>
-		<ul>
-			<% tech.forEach(t => { %>
-			<li><%= t %></li>
-			<% }) %>
-		</ul>
-		<% } %> <% if (cves && cves.length > 0) { %>
-		<h2>Daftar CVE Terkait</h2>
-		<% cves.forEach((cve, i) => { %>
-		<table
-			style="
-				background-color: #f2f2f2;
-				margin-bottom: 20px;
-				border-radius: 8px;
-				width: 100%;
-				max-width: 700px;
-			"
-		>
-			<tr>
-				<th style="width: 150px">ID</th>
-				<td><%= cve.id %></td>
-			</tr>
-			<tr>
-				<th>Deskripsi</th>
-				<td><%= cve.desc %></td>
-			</tr>
-			<tr>
-				<th>Solusi</th>
-				<td><%= cve.solution %></td>
-			</tr>
-		</table>
-		<% }) %> <% } %> <% if (zap_alerts && zap_alerts.length > 0) { %>
-		<h2>Hasil Pemindaian OWASP ZAP</h2>
-		<% // Group alerts by alert name and risk const grouped = {};
-		zap_alerts.forEach(a => { const key = a.risk + '|' + a.alert; if
-		(!grouped[key]) grouped[key] = { ...a, urls: [] };
-		grouped[key].urls.push(a.url); }); function getBgColor(risk) { if (risk ===
-		'High') return '#ffcaca'; if (risk === 'Medium') return '#fff4c2'; return
-		'#d0e7ff'; } Object.values(grouped).forEach((alert, idx) => { %>
-		<table
-			style="
-				background-color: <%= getBgColor(alert.risk) %>;
-				margin-bottom: 20px;
-				border-radius: 8px;
-				width: 100%;
-				max-width: 700px;""
-			<tr>
-				<th style="width: 150px">Risk</th>
-				<td>[<%= alert.risk %>] <%= alert.alert %></td>
-			</tr>
-			<tr>
-				<th>Deskripsi</th>
-				<td><%= alert.desc %></td>
-			</tr>
-			<tr>
-				<th>Solusi</th>
-				<td><%= alert.solution %></td>
-			</tr>
-			<tr>
-				<th>URL</th>
-				<td>
-					<% alert.urls.forEach((u, i) => { %>
-					<div>URL <%= i+1 %>: <%= u %></div>
-					<% }) %>
-				</td>
-			</tr>
-			<% if (alert.param) { %>
-			<tr>
-				<th>Parameter</th>
-				<td><%= alert.param %></td>
-			</tr>
-			<% } %>
-		</table>
-		<% }) %> <% } else { %>
-		<!-- <p><i>⚠️ Tidak ada kerentanan dari ZAP yang terdeteksi.</i></p> -->
-		<% } %> <% if (dos_summary) { %>
-		<h2>Ringkasan Pengujian DoS</h2>
-		<p><%= dos_summary %></p>
-		<% } %>
+		<script src="/js/dashboard.js"></script>
 	</body>
 </html>

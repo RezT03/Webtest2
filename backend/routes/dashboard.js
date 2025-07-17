@@ -11,9 +11,7 @@ router.get('/dashboard', (req, res) => {
     cves: [],
     zap_alerts: [],
     dos_summary: ''
-  });
-});
-
-
+  })
+})
 
 module.exports = router

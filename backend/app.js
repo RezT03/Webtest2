@@ -3,6 +3,7 @@ const path = require("path")
 const bodyParser = require("body-parser")
 const session = require("express-session")
 require("dotenv").config()
+const cors = require("cors")
 
 const authRoutes = require("./routes/auth")
 const dashboardRoutes = require("./routes/dashboard")
@@ -11,6 +12,7 @@ const historyRoutes = require("./routes/history")
 
 
 const app = express()
+app.use(cors())
 
 console.log('Starting server...')
 

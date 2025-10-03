@@ -28,6 +28,7 @@ if not logger.hasHandlers():
 ZAP_PORT = 8090
 ZAP_HOST = "127.0.0.1"
 BASE_URL = f"http://{ZAP_HOST}:{ZAP_PORT}"
+ZAP_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../ZAP_2.16.1/zap.sh"))
 zap_process = None
 driver = None
 
@@ -40,41 +41,41 @@ def is_zap_running():
         return False
 
 def start_zap_daemon():
-    # """Memulai ZAP daemon jika belum berjalan"""
-    # global zap_process
-    # if is_zap_running():
-    #     print("[+] ZAP daemon sudah berjalan, tidak perlu memulai ulang.")
-    #     return True
-
-    # print("[+] Memulai ZAP daemon...")
-    # cmd = [
-    #     "zap",
-    #     "-daemon",
-    #     "-port", str(ZAP_PORT),
-    #     "-host", ZAP_HOST,
-    #     "-config", "api.disablekey=true"
-    # ]
-    # try:
-    #     zap_process = subprocess.Popen(
-    #         cmd,
-    #         stdout=subprocess.PIPE,
-    #         stderr=subprocess.PIPE
-    #     )
-    #     print("[+] Menunggu ZAP daemon siap...")
-    #     wait_for_zap()
-    #     print("[+] ZAP daemon berhasil dimulai")
-    #     return True
-    # except FileNotFoundError:
-    #     print("[-] Error: Perintah 'zap' tidak ditemukan")
-    #     return False
-    # except Exception as e:
-    #     print(f"[-] Error memulai ZAP daemon: {e}")
-    #     return False
+    """Memulai ZAP daemon jika belum berjalan"""
+    global zap_process
     if is_zap_running():
-        print("[+] ZAP daemon terdeteksi di container.")
+        print("[+] ZAP daemon sudah berjalan, tidak perlu memulai ulang.")
         return True
-    print("[-] ZAP tidak ditemukan. Pastikan container ZAP berjalan.")
-    return False
+
+    print("[+] Memulai ZAP daemon...")
+    cmd = [
+        ZAP_PATH,
+        "-daemon",
+        "-port", str(ZAP_PORT),
+        "-host", ZAP_HOST,
+        "-config", "api.disablekey=true"
+    ]
+    try:
+        zap_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        print("[+] Menunggu ZAP daemon siap...")
+        wait_for_zap()
+        print("[+] ZAP daemon berhasil dimulai")
+        return True
+    except FileNotFoundError:
+        print("[-] Error: Perintah 'zap' tidak ditemukan")
+        return False
+    except Exception as e:
+        print(f"[-] Error memulai ZAP daemon: {e}")
+        return False
+    # if is_zap_running():
+    #     print("[+] ZAP daemon terdeteksi di container.")
+    #     return True
+    # print("[-] ZAP tidak ditemukan. Pastikan container ZAP berjalan.")
+    # return False
 
 def wait_for_zap(timeout=60):
     """Menunggu ZAP daemon siap"""

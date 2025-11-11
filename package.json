@@ -1,7 +1,7 @@
 {
 	"scripts": {
 		"start": "nodemon ./backend/app.js",
-		"dev": "npx nodemon ./backend/app.js",
+		"dev": "concurrently \"npx nodemon ./backend/app.js\" \"libretranslate --load-only en,id\"",
 		"build": "echo 'No build step required for this project'",
 		"test": "echo 'No test step required for this project'"
 	},
@@ -18,5 +18,8 @@
 		"nodemon": "^3.1.10",
 		"pdfkit": "^0.17.1",
 		"puppeteer": "^24.9.0"
+	},
+	"devDependencies": {
+		"concurrently": "^9.2.1"
 	}
 }

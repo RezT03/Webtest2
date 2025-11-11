@@ -264,3 +264,19 @@ form input[type="checkbox"] {
 .chartjs-legend li span {
 	font-size: 18px !important;
 }
+
+#translate-overlay {
+	position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.85);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+    color: #222;
+    font-family: Poppins, Arial, sans-serif;
+}
+#translate-overlay > div {
+    text-align: center;
+}

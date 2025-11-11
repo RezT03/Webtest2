@@ -2,3 +2,13 @@ node_modules
 npm-debug.log
 Dockerfile
 docker-compose.yml
+.git
+__pycache__
+*.pyc
+*.pyo
+*.log
+node_modules
+.DS_Store
+.vscode
+*.sqlite3
+tests/

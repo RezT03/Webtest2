@@ -13,6 +13,13 @@
 	</head>
 	<body>
 		<div class="container">
+			<div style="margin-bottom: 16px;">
+				<label for="dropdown-bahasa">Bahasa hasil scan:</label>
+				<select id="dropdown-bahasa">
+					<option value="en">English</option>
+					<option value="id">Bahasa Indonesia</option>
+				</select>
+			</div>
 			<h1>Dashboard Pengujian Keamanan Web</h1>
 			<form id="scan-form" action="/test/scan-all" method="POST">
 				<label for="url">Target URL:</label>
@@ -92,6 +99,11 @@
 			<div id="scan-result"></div>
 			<div id="dos-graph" style="max-width: 800px; margin: 0 auto">
 				<canvas id="dosChart" style="height: 350px; max-width: 100%"></canvas>
+			</div>
+		</div>
+		<div id="translate-overlay">
+			<div>
+				<span>Menerjemahkan...</span>
 			</div>
 		</div>
 		<script src="/js/dashboard.js"></script>

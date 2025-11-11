@@ -310,3 +310,6 @@ pyrightconfig.json
 #test results
 scan_results/
 last_page_source.html
+
+#libretranslate cache
+db

@@ -41,6 +41,9 @@ app.use((req, res, next) => {
 //DEL.ON.PROD
 
 app.use("/", dashboardRoutes)
+app.get("/", (req, res) => { 
+	  res.redirect("/dashboard")
+})
 app.use("/dashboard", dashboardRoutes)
 app.use("/test", testRoutes)
 app.use("/history", historyRoutes)

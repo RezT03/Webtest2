@@ -5,6 +5,7 @@
   "Perl": "cpe:2.3:a:perl:perl:<version>:*:*:*:*:*:*:*:*",
   "Python": "cpe:2.3:a:python:python:<version>:*:*:*:*:*:*:*:*",
   "OpenSSL": "cpe:2.3:a:openssl:openssl:<version>:*:*:*:*:*:*:*",
+  "OpenSSH": "cpe:2.3:a:openbsd:openssh:<version>:*:*:*:*:*:*:*",
   "Adobe Flash Player": "cpe:2.3:a:adobe:flash_player:<version>:*:*:*:*:*:*:*:*",
   "Bootstrap": "cpe:2.3:a:getbootstrap:bootstrap:<version>:*:*:*:*:*:*:*:*",
   "Express": "cpe:2.3:a:express:express:<version>:*:*:*:*:*:*:*:*",
@@ -60,5 +61,8 @@
   "ActiveMQ": "cpe:2.3:a:apache:activemq:<version>:*:*:*:*:*:*:*:*",
   "WordPress": "cpe:2.3:a:wordpress:wordpress:<version>:*:*:*:*:*:*:*",
   "Joomla": "cpe:2.3:a:joomla:joomla:<version>:*:*:*:*:*:*:*",
-  "openresty": "cpe:2.3:a:openresty:openresty:<version>:*:*:*:*:*:*:*"
+  "openresty": "cpe:2.3:a:openresty:openresty:<version>:*:*:*:*:*:*:*",
+  "Pure-FTPd": "cpe:2.3:a:pureftpd:pure-ftpd:<version>:*:*:*:*:*:*:*",
+  "vsftpd": "cpe:2.3:a:vsftpd:vsftpd:<version>:*:*:*:*:*:*:*",
+  "ProFTPD": "cpe:2.3:a:proftpd:proftpd:<version>:*:*:*:*:*:*:*"
 }

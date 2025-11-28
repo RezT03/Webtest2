@@ -51,6 +51,7 @@ console.log('All routes configured')
 
 app.listen(3001, () => {
     console.log("Server running on http://localhost:3001")
-})
+}).setTimeout(600000)
+
 
 module.exports = app

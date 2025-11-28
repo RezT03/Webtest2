@@ -1,120 +1,104 @@
-const express = require("express")
-const router = express.Router()
-const { spawn } = require("child_process")
-const path = require("path")
+const express = require("express");
+const router = express.Router();
+const { spawn } = require("child_process");
+const path = require("path");
 
-router.get("/dashboard", (req, res) => {
-	res.render("dashboard", {
-		xss_results: [],
-		sqli_results: [],
-		tech: [],
-		cves: [],
-		zap_alerts: [],
-		dos_summary: "",
-	})
-})
-
-// POST /test/scan-all: Jalankan pengujian dan kirim JSON ke frontend
+// POST /test/scan-all
 router.post("/scan-all", (req, res) => {
-	const {
-		url,
-		dos_enabled,
-		requests_num,
-		duration,
-		packet_size,
-		connections_per_page,
-		dos_method,
-	} = req.body
+    const {
+        url,
+        tests = [], // Array checkbox: ['tech', 'xss_sqli', 'zap', 'ssl', 'nmap', 'ratelimit']
+        nmap_enabled,
+        nmap_ports,
+        nmap_specific_ports,
+        nmap_show_os,
+        nmap_show_service,
+        ratelimit_level,
+        cookie
+    } = req.body || {};
 
-	const scanPath = path.join(__dirname, "../utils/scan_all.py")
-	const args = [scanPath, url]
+    if (!url) return res.status(400).json({ error: "url is required" });
 
-	if (dos_enabled) {
-		args.push("--dos_enabled")
-		args.push(`--requests_num=${requests_num || 100}`)
-		args.push(`--duration=${duration || 10}`)
-		args.push(`--packet_size=${packet_size || 1024}`)
-		args.push(`--connections_per_page=${connections_per_page || 100}`)
-		args.push(`--dos_method=${dos_method || "slowloris"}`)
-	}
+    const scanPath = path.join(__dirname, "../utils/scan_all.py");
+    const args = [scanPath, url];
 
-	const process = spawn("python3", args)
-	let stdout = ""
-	let stderr = ""
+    // Mapping Frontend Checkboxes -> Python Arguments
+    if (Array.isArray(tests)) {
+        if (tests.includes("tech")) args.push("--tech_enabled");
+        if (tests.includes("xss_sqli")) args.push("--xss_enabled");
+        if (tests.includes("zap")) args.push("--zap_enabled");
+        
+        // FIX 1: Tambahkan SSL flag
+        if (tests.includes("ssl")) args.push("--ssl_enabled");
 
-	process.stdout.on("data", (data) => (stdout += data))
-	process.stderr.on("data", (data) => (stderr += data))
+        // Nmap
+        if (tests.includes("nmap") || nmap_enabled) {
+            args.push("--nmap_enabled");
+            if (nmap_ports) args.push("--nmap_ports", String(nmap_ports));
+            if (nmap_specific_ports) args.push("--nmap_specific_ports", String(nmap_specific_ports));
+            if (nmap_show_os) args.push("--nmap_show_os");
+            if (nmap_show_service) args.push("--nmap_show_service");
+        }
+        
+        // FIX 2: Rate Limit hanya dikirim jika checkbox dicentang
+        if (tests.includes("ratelimit")) {
+            const lvl = ratelimit_level || "1";
+            args.push("--ratelimit_level", String(lvl));
+        }
+    }
 
-	process.on("close", async (code) => {
-		if (stderr) {
-			console.error("Python stderr:", stderr)
-		}
+    if (cookie) args.push("--cookie", String(cookie));
 
-		try {
-			const firstBrace = stdout.indexOf("{")
-			const lastBrace = stdout.lastIndexOf("}")
-			let jsonStr = ""
-			if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-				jsonStr = stdout.slice(firstBrace, lastBrace + 1)
-			}
-			if (!jsonStr || jsonStr.trim() === "") {
-				return res.status(500).json({
-					error: "Scan berhasil tapi tidak dapat memparse hasil JSON",
-					debug: {
-						stdout_preview: stdout.substring(0, 500),
-						stderr: stderr,
-					},
-				})
-			}
-			let parsed
-			try {
-				parsed = JSON.parse(jsonStr)
-			} catch (parseError) {
-				return res.status(500).json({
-					error: "Format JSON hasil scan tidak valid",
-					debug: {
-						parse_error: parseError.message,
-						json_preview: jsonStr.substring(0, 200),
-					},
-				})
-			}
-			res.json(parsed)
-		} catch (e) {
-			res.status(500).json({
-				error: "Terjadi kesalahan dalam memproses hasil scan",
-				debug: {
-					error_message: e.message,
-					stdout_preview: stdout.substring(0, 300),
-				},
-			})
-		}
-	})
+    // Debug: Cek argumen di console server
+    console.log("Executing Python:", args.join(" "));
 
-	process.on("error", (err) => {
-		console.error("Process error:", err)
-		res.status(500).json({
-			error: "Gagal menjalankan script Python",
-			debug: { process_error: err.message },
-		})
-	})
-})
+    const pythonBin = process.platform === "win32" ? "python" : "python3";
+    const py = spawn(pythonBin, args);
 
-router.get("/page-size", async (req, res) => {
-	const url = req.query.url
-	if (!url) return res.json({ size: null })
-	try {
-		const fetch = require("node-fetch")
-		const response = await fetch(url, { method: "HEAD" })
-		let size = response.headers.get("content-length")
-		if (!size) {
-			// fallback: GET and measure length
-			const body = await (await fetch(url)).arrayBuffer()
-			size = body.byteLength
-		}
-		res.json({ size: Number(size) })
-	} catch (e) {
-		res.json({ size: null })
-	}
-})
+    let stdoutChunks = [];
+    let stderrChunks = [];
 
-module.exports = router
+    py.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
+    py.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+
+    py.on("close", (code) => {
+        const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+        const stderr = Buffer.concat(stderrChunks).toString('utf8');
+
+        if (stderr) console.error("Python stderr:", stderr);
+
+        function extractJson(s) {
+            if (!s) return null;
+            s = s.trim();
+            const firstIdx = s.indexOf('{');
+            const lastIdx = s.lastIndexOf('}');
+            if (firstIdx === -1 || lastIdx === -1 || lastIdx <= firstIdx) return null;
+            try { return JSON.parse(s.substring(firstIdx, lastIdx + 1)); } 
+            catch (e) { return null; }
+        }
+
+        const parsed = extractJson(stdout);
+
+        if (!parsed) {
+            console.error(`Scan failed parsing. Stdout length: ${stdout.length}`);
+            if (!res.headersSent) {
+                return res.status(500).json({
+                    error: "Scan finished but JSON not found or invalid",
+                    debug: { 
+                        stdout_preview: stdout.slice(0, 1000) + "\n...[TRUNCATED]...\n" + stdout.slice(-1000), 
+                        stderr_preview: stderr.slice(-2000) 
+                    },
+                });
+            }
+            return;
+        }
+        
+        if (!res.headersSent) return res.json(parsed);
+    });
+
+    py.on("error", (err) => {
+        if (!res.headersSent) res.status(500).json({ error: "Failed to start Python process" });
+    });
+});
+
+module.exports = router;

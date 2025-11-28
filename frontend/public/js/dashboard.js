@@ -1,814 +1,408 @@
 document.addEventListener("DOMContentLoaded", function () {
-	// Global variable untuk chart
-	let dosChart = null
-	let originalResult = null
-	let translatedResult = null
-	let currentLang = "en"
+    let dosChart = null;
+    let originalResult = null;
+    let translatedResult = null;
+    
+    // --- 1. STYLE INJECTION (UPDATE UNTUK FOLDING) ---
+    function injectResultStyles() {
+        if (document.getElementById("scan-result-styles")) return;
+        const style = document.createElement("style");
+        style.id = "scan-result-styles";
+        style.innerHTML = `
+            /* Badges & General */
+            .badge { display:inline-block; padding:4px 10px; border-radius:4px; color:#fff; font-weight:600; font-size:0.8em; min-width:60px; text-align:center; }
+            .bg-critical { background:#000; border:1px solid #333; }
+            .bg-high { background:#dc2626; }
+            .bg-medium { background:#ea580c; }
+            .bg-low { background:#ca8a04; color:#000; }
+            .bg-safe { background:#10b981; }
+            .section-title { margin-top: 35px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; font-size: 1.3em; font-weight: 700; color: #111827; }
+            .secure-box { padding: 15px; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 8px; display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+            .skip-box { padding: 15px; background: #f3f4f6; color: #6b7280; border: 1px dashed #d1d5db; border-radius: 8px; margin-bottom: 15px; font-style: italic; }
 
-	// Toggle DoS options
-	document.getElementById("enable-dos").addEventListener("change", function () {
-		document.getElementById("dos-options").style.display = this.checked
-			? "block"
-			: "none"
-	})
+            /* --- CVE FOLDING STYLES (BARU) --- */
+            .cve-software-group { 
+                border: 1px solid #e5e7eb; 
+                border-radius: 8px; 
+                margin-bottom: 12px; 
+                overflow: hidden; 
+                background: #fff; 
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            }
+            /* Header Software (Bisa diklik) */
+            .cve-summary { 
+                padding: 15px; 
+                background: #f8fafc; 
+                cursor: pointer; 
+                font-weight: 600; 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: center; 
+                list-style: none; /* Hilangkan segitiga default browser */
+            }
+            .cve-summary::-webkit-details-marker { display: none; } /* Chrome fix */
+            .cve-summary:hover { background: #f1f5f9; }
+            
+            /* Container list CVE didalamnya */
+            .cve-list-container { border-top: 1px solid #e5e7eb; background: #fff; }
+            
+            /* Baris per CVE */
+            .cve-row { 
+                padding: 15px; 
+                border-bottom: 1px solid #f3f4f6; 
+                transition: background 0.2s;
+            }
+            .cve-row:last-child { border-bottom: none; }
+            .cve-row:hover { background: #fafafa; }
+            
+            .cve-header-line { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+            .cve-id-link { font-weight: 700; color: #2563eb; text-decoration: none; font-family: monospace; font-size: 1.1em; }
+            .cve-id-link:hover { text-decoration: underline; }
+            .cve-desc { font-size: 0.95em; line-height: 1.5; color: #374151; margin: 0 0 8px 0; }
+            .cve-solution { font-size: 0.9em; color: #059669; background: #ecfdf5; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981; }
 
-	// Auto packet size
-	document.getElementById("auto-packet-size").onclick = async function () {
-		const url = document.getElementById("url").value
-		if (url) {
-			try {
-				const res = await fetch(
-					`/test/page-size?url=` + encodeURIComponent(url),
-				)
-				const data = await res.json()
-				if (data.size) {
-					document.getElementById("packet_size").value = data.size
-				}
-			} catch (e) {
-				alert("Gagal mendapatkan ukuran otomatis.")
-			}
-		} else {
-			alert("Isi URL terlebih dahulu.")
-		}
-	}
+            /* Score Card */
+            .score-card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; margin-top: 30px; border: 1px solid #e5e7eb; }
+            .final-grade { font-size: 3.5em; font-weight: 800; display: block; margin: 10px 0; }
+            .btn-disabled { opacity: 0.6; cursor: not-allowed !important; pointer-events: none; }
+        `;
+        document.head.appendChild(style);
+    }
+    injectResultStyles();
 
-	// Fungsi untuk menentukan interval optimal berdasarkan durasi
-	function getOptimalInterval(totalDuration) {
-		if (totalDuration <= 60) return 1 // 1 detik untuk <= 60 detik
-		if (totalDuration <= 100) return 5 // 5 detik untuk 60-100 detik
-		if (totalDuration <= 300) return 10 // 10 detik untuk 100-300 detik
-		return 15 // 15 detik untuk > 300 detik
-	}
+    // --- HELPERS ---
+    function toggleOverlay(show) {
+        const overlay = document.getElementById("translate-overlay");
+        if (overlay) overlay.style.display = show ? "flex" : "none";
+    }
 
-	// Fungsi untuk agregasi data berdasarkan interval
-	function aggregateData(data, interval) {
-		if (interval === 1) return data // Tidak perlu agregasi untuk interval 1 detik
+    function escapeHTML(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 
-		const grouped = {}
+    function linkify(text) {
+        if (!text) return "";
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        return text.replace(urlRegex, function(url) {
+            return `<a href="${url}" target="_blank" style="color:#2563eb; text-decoration:underline;">${url}</a>`;
+        });
+    }
 
-		data.forEach((point) => {
-			const bucket = Math.floor(point.detik / interval) * interval
-			if (!grouped[bucket]) {
-				grouped[bucket] = {
-					detik: bucket,
-					pending: 0,
-					connected: 0,
-					error: 0,
-					closed: 0,
-					service_available: true,
-					count: 0,
-				}
-			}
+    // --- 5. TRANSLATE (Tidak berubah) ---
+    async function translateBulk(texts, targetLang = "id") {
+        if (!texts || texts.length === 0) return [];
+        try {
+            const res = await fetch("http://localhost:5000/translate", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ q: texts, source: "en", target: targetLang, format: "text" }),
+            });
+            const data = await res.json();
+            if (Array.isArray(data.translatedText)) return data.translatedText;
+            return typeof data.translatedText === 'string' ? [data.translatedText] : texts;
+        } catch (e) { return texts; }
+    }
 
-			// Akumulasi nilai untuk rata-rata
-			grouped[bucket].pending += point.pending || 0
-			grouped[bucket].connected += point.connected || 0
-			grouped[bucket].error += point.error || 0
-			grouped[bucket].closed += point.closed || 0
-			grouped[bucket].service_available =
-				grouped[bucket].service_available && (point.service_available || false)
-			grouped[bucket].count++
-		})
+    async function translateResults(result, targetLang) {
+        if (targetLang !== "id") return result;
+        const newResult = JSON.parse(JSON.stringify(result));
+        let textQueue = [], mapPointer = [];
+        function register(obj, keys) { keys.forEach(k => { if (obj && obj[k] && typeof obj[k] === 'string') { textQueue.push(obj[k]); mapPointer.push({ obj: obj, key: k }); }}); }
 
-		// Hitung rata-rata dan urutkan
-		return Object.values(grouped)
-			.map((bucket) => ({
-				detik: bucket.detik,
-				pending: Math.round(bucket.pending / bucket.count),
-				connected: Math.round(bucket.connected / bucket.count),
-				error: Math.round(bucket.error / bucket.count),
-				closed: Math.round(bucket.closed / bucket.count),
-				service_available: bucket.service_available,
-			}))
-			.sort((a, b) => a.detik - b.detik)
-	}
+        if (newResult.zap_alerts) newResult.zap_alerts.forEach(a => register(a, ['description', 'solution']));
+        if (newResult.cves) newResult.cves.forEach(c => register(c, ['description']));
+        if (newResult.impact_analysis) register(newResult.impact_analysis, ['summary', 'label']);
 
-	// Function untuk membuat DoS chart dengan optimasi
-	function createDosChart(timelineData) {
-		const ctx = document.getElementById("dosChart")
-		if (!ctx) {
-			console.error("Canvas dosChart tidak ditemukan")
-			return
-		}
+        if (textQueue.length > 0) {
+            const CHUNK = 50;
+            for (let i = 0; i < textQueue.length; i += CHUNK) {
+                const chunk = textQueue.slice(i, i + CHUNK);
+                const translated = await translateBulk(chunk, "id");
+                for (let j = 0; j < translated.length; j++) {
+                    const pt = mapPointer[i + j]; if (pt) pt.obj[pt.key] = translated[j];
+                }
+            }
+        }
+        return newResult;
+    }
 
-		// Hapus chart lama jika ada
-		if (dosChart) {
-			dosChart.destroy()
-			dosChart = null
-		}
+    // --- 6. RENDER FUNCTION (UPDATED) ---
+    async function renderScanResult(result) {
+        let html = "";
 
-		// Validasi dan default data
-		if (!timelineData || timelineData.length === 0) {
-			console.warn("Data timeline kosong, menggunakan data default")
-			timelineData = [
-				{
-					detik: 0,
-					pending: 0,
-					connected: 0,
-					error: 0,
-					closed: 0,
-					service_available: true,
-				},
-			]
-		}
+        // 1. SCORE CARD (Top)
+        if (result.security_score) {
+            const score = result.security_score;
+            const grade = score.final_score;
+            let color = grade === 'A' ? '#10b981' : grade === 'B' ? '#3b82f6' : grade === 'C' ? '#ff880aff' : (grade === 'N/A' ? '#6b7280' : '#ef4444');
+            let summaryText = result.impact_analysis ? escapeHTML(result.impact_analysis.summary) : "";
+            
+            html += `<div class="score-card" style="border-top: 5px solid ${color};">
+                <h2 style="margin:0; color:#4b5563;">${grade === 'N/A' ? 'Status Scan' : 'Penilaian Keamanan Akhir'}</h2>
+                <span class="final-grade" style="color:${color}">${grade}</span>
+                ${grade !== 'N/A' ? `<div style="display:flex; justify-content:center; gap:15px; margin-top:10px;">
+                    <div class="badge bg-secondary" style="background:#e5e7eb; color:#374151;">Software: ${score.cve_score}</div>
+                    <div class="badge bg-secondary" style="background:#e5e7eb; color:#374151;">Security: ${score.zap_score}</div>
+                </div>` : ''}
+                <div style="margin-top:15px; font-size:0.95em; color:#555;">${summaryText}</div>
+            </div>`;
+        }
 
-		// Hitung durasi total test
-		const totalDuration = Math.max(...timelineData.map((t) => t.detik || 0))
-		const interval = getOptimalInterval(totalDuration)
+        // ============================================================
+        // 2. TECH & CVE (FOLDING MODE - REVISI UTAMA)
+        // ============================================================
+        html += `<h3 class="section-title">1. Vulnerability Assessment</h3>`;
+        
+        if (result.tech !== null) {
+            // Render Daftar Teknologi
+            if (result.tech.length > 0) {
+                html += `<div style="margin-bottom:20px; padding:15px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
+                    <strong style="display:block; margin-bottom:8px; color:#475569;">Teknologi Terdeteksi:</strong> 
+                    ${result.tech.map(t => `<span style="display:inline-block; background:#fff; border:1px solid #cbd5e1; padding:4px 10px; border-radius:20px; margin-right:5px; margin-bottom:5px; font-size:0.9em; color:#334155;">${escapeHTML(t)}</span>`).join('')}
+                </div>`;
+            } else { 
+                html += `<div style="margin-bottom:15px; color:#666;"><em>Tidak ada teknologi spesifik terdeteksi.</em></div>`; 
+            }
 
-		// Agregasi data berdasarkan interval
-		const processedData = aggregateData(timelineData, interval)
+            // Render CVE dengan Folding
+            if (result.cves && result.cves.length > 0) {
+                
+                // 1. Grouping Logic: Kelompokkan CVE berdasarkan Nama Software
+                const grouped = {};
+                result.cves.forEach(c => {
+                    const softwareName = c.software || "Unknown Software";
+                    if (!grouped[softwareName]) grouped[softwareName] = [];
+                    grouped[softwareName].push(c);
+                });
 
-		console.log(
-			`Total duration: ${totalDuration}s, Using interval: ${interval}s, Data points: ${processedData.length}`,
-		)
+                // 2. Render Loop per Group (Software)
+                Object.keys(grouped).forEach(software => {
+                    const list = grouped[software];
+                    
+                    // Hitung Max Risk untuk Badge di Header
+                    let maxScore = 0;
+                    list.forEach(c => { 
+                        const s = parseFloat(c.cvss_score || 0);
+                        if(s > maxScore) maxScore = s; 
+                    });
+                    
+                    let headerBadgeClass = maxScore >= 9 ? "bg-critical" : maxScore >= 7 ? "bg-high" : maxScore >= 4 ? "bg-medium" : "bg-low";
+                    
+                    // Buat elemen DETAILS (Folding)
+                    html += `
+                    <details class="cve-software-group">
+                        <summary class="cve-summary">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="font-size:1.05em; color:#1e293b;">${escapeHTML(software)}</span>
+                            </div>
+                            <span class="badge ${headerBadgeClass}">
+                                ${list.length} Issue${list.length > 1 ? 's' : ''} (Max CVSS ${maxScore.toFixed(1)}) ▾
+                            </span>
+                        </summary>
+                        
+                        <div class="cve-list-container">
+                            ${list.map(cve => {
+                                const score = parseFloat(cve.cvss_score || 0);
+                                let riskCls = score >= 9 ? "bg-critical" : score >= 7 ? "bg-high" : score >= 4 ? "bg-medium" : "bg-low";
+                                let desc = escapeHTML(cve.description).replace(/^\[.*?\]\s*/, '').replace(/^\|.*?\|\s*/, '');
+                                
+                                return `
+                                <div class="cve-row">
+                                    <div class="cve-header-line">
+                                        <a href="https://nvd.nist.gov/vuln/detail/${cve.cve_id}" target="_blank" class="cve-id-link">
+                                            ${cve.cve_id} <span style="font-size:0.8em; color:#9ca3af; font-weight:normal;">↗</span>
+                                        </a>
+                                        <span class="badge ${riskCls}">CVSS ${score.toFixed(1)}</span>
+                                    </div>
+                                    <p class="cve-desc">${desc}</p>
+                                    <div class="cve-solution">
+                                        <strong>Solusi:</strong> ${linkify(cve.solution || "Update ke versi terbaru atau lihat advisory resmi.")}
+                                    </div>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </details>`;
+                });
 
-		// Prepare data dengan validasi
-		const labels = processedData.map((t) => `${t.detik || 0}s`)
-		const pending = processedData.map((t) => t.pending || 0)
-		const connected = processedData.map((t) => t.connected || 0)
-		const error = processedData.map((t) => t.error || 0)
-		const closed = processedData.map((t) => t.closed || 0)
-		const serviceAvailable = processedData.map((t) =>
-			t.service_available ? 1 : 0,
-		)
+            } else {
+                html += `<div class="secure-box"><div><strong>Tidak Ditemukan CVE.</strong><br><small>Versi software yang terdeteksi tidak memiliki kerentanan publik yang diketahui.</small></div></div>`;
+            }
+        } else { 
+            html += `<div class="skip-box">Test Deteksi Teknologi & CVE tidak dijalankan.</div>`; 
+        }
+        // ============================================================
 
-		// Konfigurasi chart yang diperbaiki
-		const config = {
-			type: "line",
-			data: {
-				labels: labels,
-				datasets: [
-					{
-						label: "Pending",
-						data: pending,
-						borderColor: "#6c757d",
-						backgroundColor: "rgba(108, 117, 125, 0.1)",
-						fill: false,
-						tension: 0.2,
-						pointRadius: Math.min(4, Math.max(1, 100 / processedData.length)), // Sesuaikan ukuran point
-						pointHoverRadius: 6,
-						pointBackgroundColor: "#6c757d",
-						pointBorderColor: "#6c757d",
-						yAxisID: "y",
-					},
-					{
-						label: "Connected",
-						data: connected,
-						borderColor: "#28a745",
-						backgroundColor: "rgba(40, 167, 69, 0.1)",
-						fill: false,
-						tension: 0.2,
-						pointRadius: Math.min(4, Math.max(1, 100 / processedData.length)),
-						pointHoverRadius: 6,
-						pointBackgroundColor: "#28a745",
-						pointBorderColor: "#28a745",
-						yAxisID: "y1",
-					},
-					{
-						label: "Error",
-						data: error,
-						borderColor: "#dc3545",
-						backgroundColor: "rgba(220, 53, 69, 0.1)",
-						fill: false,
-						tension: 0.2,
-						pointRadius: Math.min(4, Math.max(1, 100 / processedData.length)),
-						pointHoverRadius: 6,
-						pointBackgroundColor: "#dc3545",
-						pointBorderColor: "#dc3545",
-						yAxisID: "y1",
-					},
-					{
-						label: "Closed",
-						data: closed,
-						borderColor: "#007bff",
-						backgroundColor: "rgba(0, 123, 255, 0.1)",
-						fill: false,
-						tension: 0.2,
-						pointRadius: Math.min(4, Math.max(1, 100 / processedData.length)),
-						pointHoverRadius: 6,
-						pointBackgroundColor: "#007bff",
-						pointBorderColor: "#007bff",
-						yAxisID: "y1",
-					},
-					{
-						label: "Service Available",
-						data: serviceAvailable,
-						borderColor: "#20c997",
-						backgroundColor: "rgba(32, 201, 151, 0.2)",
-						fill: true,
-						stepped: true,
-						pointRadius: Math.min(3, Math.max(1, 80 / processedData.length)),
-						pointHoverRadius: 5,
-						pointBackgroundColor: "#20c997",
-						pointBorderColor: "#20c997",
-						yAxisID: "y1",
-					},
-				],
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				interaction: {
-					mode: "index",
-					intersect: false,
-				},
-				plugins: {
-					title: {
-						display: true,
-						text: `DoS Test - Connection Timeline (Interval: ${interval}s)`,
-						font: {
-							size: 16,
-							weight: "bold",
-						},
-						color: "#222",
-					},
-					legend: {
-						display: true,
-						position: "top",
-						labels: {
-							font: {
-								size: 12,
-							},
-							color: "#222",
-							usePointStyle: true,
-							padding: 20,
-						},
-					},
-					tooltip: {
-						enabled: true,
-						backgroundColor: "rgba(0, 0, 0, 0.8)",
-						titleColor: "#fff",
-						bodyColor: "#fff",
-						borderColor: "#ddd",
-						borderWidth: 1,
-						cornerRadius: 6,
-						callbacks: {
-							title: function (context) {
-								return `Time: ${context[0].label}`
-							},
-							label: function (context) {
-								const label = context.dataset.label || ""
-								const value = context.parsed.y
+        // 3. INJECTION
+        html += `<h3 class="section-title">2. Injection Testing</h3>`;
+        if (result.xss_results !== null) {
+            let hasInjection = false;
+            if (result.xss_results?.length) {
+                hasInjection = true;
+                html += `<h4>XSS</h4><table><tr><th>Endpoint</th><th>Payload</th><th>Hasil</th></tr>`;
+                result.xss_results.forEach(r => html+=`<tr><td>${escapeHTML(r.endpoint)}</td><td><code>${escapeHTML(r.payload)}</code></td><td style="color:red;">${escapeHTML(r.result)}</td></tr>`);
+                html += `</table>`;
+            }
+            if (result.sqli_results?.length) {
+                hasInjection = true;
+                html += `<h4>SQL Injection</h4><table><tr><th>Endpoint</th><th>Payload</th><th>Hasil</th></tr>`;
+                result.sqli_results.forEach(r => html+=`<tr><td>${escapeHTML(r.endpoint)}</td><td><code>${escapeHTML(r.payload)}</code></td><td style="color:red;">${escapeHTML(r.result)}</td></tr>`);
+                html += `</table>`;
+            }
+            if (!hasInjection) html += `<div class="secure-box"><span style="font-size:1.5em"></span><div><strong>Aman dari Injeksi Dasar.</strong></div></div>`;
+        } else { html += `<div class="skip-box">Test Injection tidak dijalankan.</div>`; }
 
-								if (label === "Service Available") {
-									return `${label}: ${value === 1 ? "Available" : "Down"}`
-								}
+        // 4. CONFIG
+        html += `<h3 class="section-title">3. Server Configuration</h3>`;
+        if (result.zap_alerts !== null) {
+            if (!result.zap_alerts || result.zap_alerts.length === 0) {
+                html += `<div class="secure-box"><div><strong>ZAP: Konfigurasi Aman.</strong></div></div>`;
+            } else {
+                html += `<h4>ZAP Alerts</h4>`;
+                const grouped = { High: {}, Medium: {}, Low: {}, Informational: {} };
+                result.zap_alerts.forEach(a => {
+                    let risk = a.risk || "Informational";
+                    if (/high/i.test(risk)) risk = "High"; else if (/medium/i.test(risk)) risk = "Medium"; else if (/low/i.test(risk)) risk = "Low"; else risk = "Informational";
+                    const name = a.alert;
+                    if (!grouped[risk][name]) grouped[risk][name] = { description: a.description, solution: a.solution, urls: new Set() };
+                    if(a.url) grouped[risk][name].urls.add(a.url);
+                });
+                ["High", "Medium", "Low", "Informational"].forEach(risk => {
+                    const alerts = grouped[risk];
+                    const keys = Object.keys(alerts);
+                    if (keys.length > 0) {
+                        const cls = risk === 'High' ? 'zap-high' : risk === 'Medium' ? 'zap-medium' : risk === 'Low' ? 'zap-low' : 'zap-info';
+                        html += `<div style="margin:10px 0;"><span class="badge ${cls}" style="font-size:1em; width:100%; text-align:left; padding:8px;">${risk} (${keys.length})</span></div>`;
+                        keys.forEach(name => {
+                            const d = alerts[name];
+                            html += `<details class="alert-entry"><summary>${escapeHTML(name)} <span style="color:#666;">(${d.urls.size} URL)</span></summary><div class="alert-content"><p><strong>Desc:</strong> ${escapeHTML(d.description)}</p><p><strong>Sol:</strong> ${escapeHTML(d.solution)}</p><ul class="url-list">${Array.from(d.urls).map(u=>`<li>${escapeHTML(u)}</li>`).join('')}</ul></div></details>`;
+                        });
+                    }
+                });
+            }
+        } else { html += `<div class="skip-box">Test ZAP tidak dijalankan.</div>`; }
 
-								// Tambahkan info interval jika > 1
-								if (interval > 1) {
-									return `${label}: ${value} (avg over ${interval}s)`
-								}
-								return `${label}: ${value}`
-							},
-						},
-					},
-				},
-				scales: {
-					x: {
-						title: {
-							display: true,
-							text: `Time (seconds) - Interval: ${interval}s`,
-							font: {
-								size: 14,
-								weight: "bold",
-							},
-							color: "#222",
-						},
-						ticks: {
-							font: {
-								size: 12,
-							},
-							color: "#222",
-							// Sesuaikan jumlah ticks untuk data yang banyak
-							maxTicksLimit: Math.min(
-								20,
-								Math.max(5, Math.floor(processedData.length / 2)),
-							),
-						},
-						grid: {
-							color: "rgba(0, 0, 0, 0.1)",
-						},
-					},
-					y: {
-						type: "linear",
-						display: true,
-						position: "left",
-						title: {
-							display: true,
-							text: "Pending Connections",
-							font: {
-								size: 14,
-								weight: "bold",
-							},
-							color: "#222",
-						},
-						ticks: {
-							font: {
-								size: 12,
-							},
-							color: "#222",
-						},
-						grid: {
-							color: "rgba(0, 0, 0, 0.1)",
-						},
-						beginAtZero: true,
-					},
-					y1: {
-						type: "linear",
-						display: true,
-						position: "right",
-						title: {
-							display: true,
-							text: "Connected/Error/Closed/Service",
-							font: {
-								size: 14,
-								weight: "bold",
-							},
-							color: "#222",
-						},
-						ticks: {
-							font: {
-								size: 12,
-							},
-							color: "#222",
-						},
-						grid: {
-							drawOnChartArea: false,
-							color: "rgba(0, 0, 0, 0.1)",
-						},
-						beginAtZero: true,
-					},
-				},
-			},
-		}
+        if (result.ssl_result !== null) {
+            const ssl = result.ssl_result;
+            if (!ssl) html += `<div style="padding:10px; color:red;">Gagal SSL Scan.</div>`;
+            else {
+                html += `<h4>SSL/TLS Security</h4>`;
+                let issues = [...(ssl.weak_ciphers || []), ...(ssl.vulnerabilities || [])];
+                if (issues.length === 0 && !ssl.certificate?.error) {
+                    html += `<div class="secure-box"><div><strong>SSL Aman.</strong></div></div>`;
+                } else {
+                    html += `<div style="background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:6px; color:#991b1b; margin-bottom:10px;"><ul>${issues.map(i => `<li>${escapeHTML(i)}</li>`).join('')}</ul></div>`;
+                }
+                if (ssl.certificate && !ssl.certificate.error) {
+                    html += `<div style="font-size:0.9em; background:#f3f4f6; padding:10px; border-radius:6px;"><div><strong>Subject:</strong> ${escapeHTML(ssl.certificate.subject)}</div><div><strong>Issuer:</strong> ${escapeHTML(ssl.certificate.issuer)}</div><div><strong>Trusted:</strong> ${ssl.certificate.is_trusted ? '<span style="color:green">YA</span>' : '<span style="color:red">TIDAK</span>'}</div></div>`;
+                }
+            }
+        } else { html += `<div class="skip-box">Test SSL tidak dijalankan.</div>`; }
 
-		try {
-			dosChart = new Chart(ctx, config)
-		} catch (error) {
-			console.error("Error creating chart:", error)
-		}
-	}
+        if (result.nmap_result !== null) {
+            html += `<h4>Port Scanning</h4>`;
+            if (result.nmap_result.open_ports && result.nmap_result.open_ports.length > 0) {
+                html += `<table><thead><tr><th>Port</th><th>Status</th><th>Service</th><th>Analisis</th></tr></thead><tbody>`;
+                result.nmap_result.open_ports.forEach(p => {
+                    let cls = p.state === 'open' ? 'bg-high' : 'bg-secondary';
+                    html += `<tr><td><b>${p.port}</b></td><td><span class="badge ${cls}">${escapeHTML(p.state)}</span></td><td>${escapeHTML(p.service)} ${escapeHTML(p.version||"")}</td><td>${escapeHTML(p.advice||"")}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            } else { html += `<div class="secure-box"><div><strong>Tidak Ada Port Terbuka.</strong></div></div>`; }
+        } else { html += `<div class="skip-box">Test Nmap tidak dijalankan.</div>`; }
 
-	// Fungsi translate menggunakan LibreTranslate lokal
-	async function translateText(text, targetLang = "id") {
-		if (!text || typeof text !== "string") return text
-		try {
-			const res = await fetch("http://localhost:5000/translate", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					q: text,
-					source: "en",
-					target: targetLang,
-					format: "text",
-				}),
-			})
-			const data = await res.json()
-			return data.translatedText || text
-		} catch (e) {
-			console.warn("Gagal translate:", e)
-			return text
-		}
-	}
+        // 5. RESILIENCE
+        if (result.ratelimit_result !== null) {
+             html += `<h3 class="section-title">4. Resilience</h3>`;
+             const rl = result.ratelimit_result;
+             const isSafe = rl.summary.includes("AMAN");
+             const color = isSafe ? "d1fae5" : "fee2e2";
+             html += `<div style="padding:15px; background:#${color}; border-radius:8px;">${escapeHTML(rl.summary)}</div>`;
+        } else { html += `<h3 class="section-title">4. Resilience</h3><div class="skip-box">Test Rate Limit tidak dijalankan.</div>`; }
 
-	// Helper untuk translate array of CVE/ZAP
-	async function translateResults(result, targetLang) {
-		if (targetLang !== "id") return result
-		// Deep copy agar tidak mengubah originalResult
-		const newResult = JSON.parse(JSON.stringify(result))
-		// Translate CVE descriptions
-		if (newResult.cves && newResult.cves.length) {
-			for (const cve of newResult.cves) {
-				if (cve.description) {
-					cve.description = await translateText(cve.description, "id")
-				}
-				if (cve.solution) {
-					cve.solution = await translateText(cve.solution, "id")
-				}
-			}
-		}
-		// Translate ZAP alerts
-		if (newResult.zap_alerts && newResult.zap_alerts.length) {
-			for (const alert of newResult.zap_alerts) {
-				if (alert.description) {
-					alert.description = await translateText(alert.description, "id")
-				}
-				if (alert.solution) {
-					alert.solution = await translateText(alert.solution, "id")
-				}
-			}
-		}
-		return newResult
-	}
-	// Escape HTML untuk mencegah XSS berulang
-	function escapeHTML(str) {
-		return str.replace(
-			/[&<>"'`]/g,
-			(c) =>
-				({
-					"&": "&amp;",
-					"<": "&lt;",
-					">": "&gt;",
-					'"': "&quot;",
-					"'": "&#39;",
-					"`": "&#96;",
-				}[c]),
-		)
-	}
+        document.getElementById("scan-result").innerHTML = html;
+    }
 
-	// Helper: ekstrak URL unik dari object alert ZAP (beberapa format possible)
-	function extractAlertUrls(alert) {
-		const urls = new Set()
-		if (!alert) return []
-		// Common fields
-		if (Array.isArray(alert.urls)) {
-			alert.urls.forEach((u) => u && urls.add(u))
-		}
-		if (alert.url) urls.add(alert.url)
-		if (alert.uri) urls.add(alert.uri)
+    // --- 7. FORM SUBMIT (SAMA PERSIS) ---
+    const scanForm = document.getElementById("scan-form");
+    if (scanForm) {
+        scanForm.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-start-scan');
+            
+            btn.disabled = true;
+            btn.classList.add("btn-disabled");
+            btn.innerText = "Sedang Memproses...";
 
-		// ZAP may return 'instances' with uri/url field
-		if (Array.isArray(alert.instances)) {
-			alert.instances.forEach((inst) => {
-				if (!inst) return
-				if (inst.uri) urls.add(inst.uri)
-				if (inst.url) urls.add(inst.url)
-				// sometimes instance has 'request' or 'evidence' - try to parse basic url
-				if (inst.request && typeof inst.request === "string") {
-					const match = inst.request.match(/(https?:\/\/[^\s'"]+)/)
-					if (match) urls.add(match[1])
-				}
-			})
-		}
-		return Array.from(urls)
-	}
+            const progressBar = document.getElementById("progress-bar");
+            document.getElementById("progress-container").style.display = "block";
+            
+            const start = Date.now();
+            let w = 0;
+            const timer = setInterval(() => { 
+                if(w < 95) { w += 0.5; progressBar.style.width = w+"%"; progressBar.innerText = Math.floor(w)+"%"; }
+            }, 500);
+            document.getElementById("progress-status").innerHTML = `Selesai dalam <strong>${formatDuration(Date.now()-start)}</strong>`;
+            try {
+                const formData = new FormData(this);
+                const payload = {
+                    url: formData.get("url"),
+                    cookie: formData.get("cookie_header").trim(),
+                    tests: Array.from(document.querySelectorAll('input[name="tests"]:checked')).map(c => c.value),
+                    lang: document.getElementById("dropdown-bahasa")?.value || "en"
+                };
 
-	// Fungsi render hasil scan
-	async function renderScanResult(result) {
-		let html = ""
-		document.getElementById("scan-result").innerHTML = JSON.stringify(result)
-		// Render hasil scan
-		// 1. Daftar software terdeteksi
-		if (result.tech && result.tech.length) {
-			html += `<h3 class="section-title">Teknologi Terdeteksi</h3>
-    <table>
-        <tr class="medium-header"><th>Nama Software</th><th>Versi</th><th>CVE Ditemukan</th></tr>`
-			result.tech.forEach((sw) => {
-				const [name, ...verArr] = sw.split(" ")
-				const ver = verArr.join(" ")
-				const cveCount = (result.cves || []).filter((cve) =>
-					(cve.software || "").toLowerCase().startsWith(sw.toLowerCase()),
-				).length
-				html += `<tr>
-            <td>${name}</td>
-            <td>${ver}</td>
-            <td>${cveCount}</td>
-        </tr>`
-			})
-			html += `</table>`
-		}
+                const res = await fetch("/test/scan-all", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                clearInterval(timer);
+                
+                if (!res.ok) throw new Error("Server Error");
+                const data = await res.json();
+                
+                progressBar.style.width = "100%"; progressBar.innerText = "Selesai";
+                progressBar.classList.add("done");
+                
+                originalResult = data;
+                const lang = document.getElementById("dropdown-bahasa").value;
+                
+                if(lang === "id") {
+                    toggleOverlay(true);
+                    await new Promise(r => setTimeout(r, 100));
+                    translatedResult = await translateResults(originalResult, "id");
+                    renderScanResult(translatedResult);
+                    toggleOverlay(false);
+                } else {
+                    renderScanResult(originalResult);
+                }
 
-		// 2. Tabel CVE
-		if (result.cves && result.cves.length) {
-			// Urutkan dari terbaru
-			result.cves.sort((a, b) => {
-				const da = new Date(a.published || a.lastModified || 0)
-				const db = new Date(b.published || b.lastModified || 0)
-				return db - da
-			})
-			const cveGroups = {}
-			result.cves.forEach((cve) => {
-				const sw = cve.software || "Lainnya"
-				if (!cveGroups[sw]) cveGroups[sw] = []
-				cveGroups[sw].push(cve)
-			})
-			html += `<h3 class="section-title">CVE</h3>
-    <table>
-        <tr class="medium-header">
-            <th>Software</th>
-            <th>ID</th>
-            <th>Deskripsi</th>
-            <th>Solusi</th>
-            <th>CVSS Score</th>
-            <th>Tanggal</th>
-        </tr>`
-			Object.keys(cveGroups).forEach((software) => {
-				const cves = cveGroups[software]
-				cves.forEach((cve, idx) => {
-					// Penilaian status CVSS
-					let cvss = cve.cvss_score
-					let status = "-"
-					let statusClass = ""
-					if (typeof cvss === "number") {
-						if (cvss >= 9) {
-							status = "Critical"
-							statusClass = "cvss-critical"
-						} else if (cvss >= 7) {
-							status = "Tinggi"
-							statusClass = "cvss-tinggi"
-						} else if (cvss >= 4) {
-							status = "Menengah"
-							statusClass = "cvss-menengah"
-						} else {
-							status = "Rendah"
-							statusClass = "cvss-rendah"
-						}
-					}
-					const tgl = cve.published
-						? moment(cve.published).format("YYYY-MM-DD")
-						: ""
-					html += `<tr>`
-					if (idx === 0) {
-						html += `<td rowspan="${cves.length}" style="vertical-align: top; text-align: left;">${software}</td>`
-					}
-					html += `
-                <td>${cve.cve_id || cve.id}</td>
-                <td>${cve.description || cve.desc || cve.deskripsi || ""}</td>
-                <td>${cve.solution || ""}</td>
-                <td>${
-									cvss !== undefined && cvss !== null
-										? `${cvss} <span class="cvss-level ${statusClass}">${status}</span>`
-										: "-"
-								}</td>
-                <td>${tgl}</td>
-            </tr>`
-				})
-			})
-			html += `</table>`
-		}
-
-		// 3+4. Grupkan ZAP alerts by name per level dan kumpulkan URL unik per alert
-		if (result.zap_alerts && result.zap_alerts.length) {
-			// Grup map per risk -> (alertName -> { name, description, solution, urls:Set })
-			const grouped = {
-				High: new Map(),
-				Medium: new Map(),
-				Low: new Map(),
-				Informational: new Map(),
-			}
-
-			result.zap_alerts.forEach((a) => {
-				const risk =
-					(a.risk || "").charAt(0).toUpperCase() +
-					(a.risk || "").slice(1).toLowerCase()
-				const name = (a.alert || a.name || "").trim()
-				if (!name) return
-				if (!grouped[risk]) return
-
-				if (!grouped[risk].has(name)) {
-					grouped[risk].set(name, {
-						name,
-						description: a.description || a.desc || "",
-						solution: a.solution || a.sol || "",
-						urls: new Set(),
-					})
-				}
-				const entry = grouped[risk].get(name)
-				// Tambah semua URL yang dapat diekstrak dari object alert
-				const urls = extractAlertUrls(a)
-				if (urls && urls.length) {
-					urls.forEach((u) => entry.urls.add(String(u)))
-				}
-			})
-
-			// Hitung jumlah unique alerts per risk
-			const zapAlertLevels = {
-				High: grouped.High.size,
-				Medium: grouped.Medium.size,
-				Low: grouped.Low.size,
-				Informational: grouped.Informational.size,
-			}
-			const totalUniqueAlerts =
-				zapAlertLevels.High +
-				zapAlertLevels.Medium +
-				zapAlertLevels.Low +
-				zapAlertLevels.Informational
-
-			html += `<div style="margin-bottom:18px">
-        <b>Jumlah Alerts:</b> ${totalUniqueAlerts}. &nbsp;
-        <span style="color:#b71c1c">Tinggi: ${zapAlertLevels.High}</span>,
-        <span style="color:#ff9800">Medium: ${zapAlertLevels.Medium}</span>,
-        <span style="color:#888">Rendah: ${zapAlertLevels.Low}</span>,
-        <span style="color:#2196f3">Info: ${zapAlertLevels.Informational}</span>
-    </div>`
-
-			// Render grouped alerts per risk (satu entry per alert name)
-			const riskOrder = ["High", "Medium", "Low", "Informational"]
-			const riskLabel = {
-				High: "Tinggi",
-				Medium: "Medium",
-				Low: "Rendah",
-				Informational: "Info",
-			}
-
-			html += `<h3 class="section-title">ZAP Result</h3>
-    <div class="zap-level-btns">`
-
-			riskOrder.forEach((risk) => {
-				const map = grouped[risk]
-				if (!map || map.size === 0) return
-
-				const listId = `zap-list-${risk}`
-				html += `<button type="button" onclick="toggleZapList('${listId}')" style="background:${
-					risk === "High"
-						? "#dc3545"
-						: risk === "Medium"
-						? "#ffa500"
-						: risk === "Low"
-						? "#fff9c4"
-						: "#90caf9"
-				};color:${
-					risk === "High" || risk === "Medium" ? "#fff" : "#222"
-				};border:1px solid #ccc;">
-                ${riskLabel[risk]} (${map.size})
-            </button>
-            <div id="${listId}" style="display:none;margin-bottom:10px;margin-left:10px;">`
-
-				for (const [alertName, entry] of map.entries()) {
-					const alertDisplay = escapeHTML(alertName)
-					const desc = escapeHTML(entry.description || "")
-					const sol = escapeHTML(entry.solution || "")
-					const urlsArr = Array.from(entry.urls)
-					let urlsHtml = "<i>Tidak ada URL</i>"
-					if (urlsArr.length) {
-						urlsHtml =
-							"<ol>" +
-							urlsArr.map((u) => `<li>${escapeHTML(String(u))}</li>`).join("") +
-							"</ol>"
-					}
-					html += `<table style="margin-bottom:10px">
-                    <tr class="${risk.toLowerCase()}-header"><th colspan="2">[${
-						riskLabel[risk]
-					}] ${alertDisplay}</th></tr>
-                    <tr><td style="width:150px;vertical-align:top">Deskripsi</td><td>${desc}</td></tr>
-                    <tr><td style="vertical-align:top">Solusi</td><td>${sol}</td></tr>
-                    <tr><td style="vertical-align:top">URL Terdampak</td><td>${urlsHtml}</td></tr>
-                </table>`
-				}
-
-				html += `</div>`
-			})
-
-			html += `</div>`
-		}
-		// 5a. Hasil XSS
-		if (result.xss_results && result.xss_results.length) {
-			html += `<h3 class="section-title">Hasil XSS</h3>
-    <table>
-        <tr class="medium-header"><th>Form/Endpoint</th><th>Payload</th><th>Hasil</th></tr>`
-			result.xss_results.forEach((xss) => {
-				html += `<tr>
-            <td>${xss.endpoint || xss.form || "-"}</td>
-            <td>${xss.payload || "-"}</td>
-            <td>${xss.result || xss.status || "-"}</td>
-        </tr>`
-			})
-			html += `</table>`
-		}
-
-		// 5b. Hasil SQLi
-		if (result.sqli_results && result.sqli_results.length) {
-			html += `<h3 class="section-title">Hasil SQL Injection</h3>
-    <table>
-        <tr class="medium-header"><th>Form/Endpoint</th><th>Payload</th><th>Hasil</th></tr>`
-			result.sqli_results.forEach((sqli) => {
-				html += `<tr>
-            <td>${sqli.endpoint || sqli.form || "-"}</td>
-            <td>${sqli.payload || "-"}</td>
-            <td>${sqli.result || sqli.status || "-"}</td>
-        </tr>`
-			})
-			html += `</table>`
-		}
-		// 6. DoS Test
-		if (result.dos_summary) {
-			html += `<h3 class="section-title">DoS Test</h3>
-    <div class="dos-summary">${result.dos_summary}</div>`
-		}
-
-		// 7. Penilaian keamanan (opsional)
-		if (result.security_score) {
-			html += `<h3 class="section-title">Penilaian Keamanan</h3>
-    <table>
-        <tr><th>Aspek</th><th>Nilai</th></tr>
-        <tr><td>CVSS (CVE)</td><td><b>${result.security_score.cve_score}</b></td></tr>
-        <tr><td>ZAP Alert</td><td><b>${result.security_score.zap_score}</b></td></tr>
-        <tr><td><b>Skor Akhir</b></td><td style="font-size:1.3em"><b>${result.security_score.final_score}</b></td></tr>
-    </table>
-    <div style="margin-bottom:18px;color:#555;">
-        <b>Keterangan:</b> A = Sangat Aman, B = Aman, C = Cukup, D = Rentan, E = Sangat Rentan
-    </div>`
-		}
-
-		// Setelah selesai:
-		document.getElementById("scan-result").innerHTML = html
-		// Grafik DoS
-		if (result.dos_timeline && result.dos_timeline.length) {
-			setTimeout(() => {
-				createDosChart(result.dos_timeline)
-			}, 100)
-		}
-	}
-
-	// Form submit (bagian yang sama, tidak perlu diubah)
-	const BASE_URL = "http://backend:3001"
-	document
-		.getElementById("scan-form")
-		.addEventListener("submit", async function (e) {
-			e.preventDefault()
-			const progressContainer = document.getElementById("progress-container")
-			const progressBar = document.getElementById("progress-bar")
-			progressContainer.style.display = "block"
-			progressBar.style.width = "20%"
-			progressBar.innerText = "Memulai..."
-
-			let progress = 0
-			const interval = setInterval(() => {
-				if (progress < 80) {
-					progress += 5
-					progressBar.style.width = progress + "%"
-					progressBar.innerText = progress + "%"
-				}
-			}, 1000)
-
-			const formData = new FormData(this)
-			const data = Object.fromEntries(formData.entries())
-			data.dos_enabled = document.getElementById("enable-dos").checked
-			data.stop_on_down = document.getElementById("stop-on-down").checked
-
-			try {
-				const res = await fetch(`/test/scan-all`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(data),
-				})
-				originalResult = await res.json()
-				currentLang = document.getElementById("dropdown-bahasa").value
-				if (currentLang === "id") {
-					translatedResult = await translateResults(originalResult, "id")
-					await renderScanResult(translatedResult)
-				} else {
-					await renderScanResult(originalResult)
-				}
-				clearInterval(interval)
-				progressBar.style.width = "100%"
-				progressBar.innerText = "Selesai"
-				progressBar.classList.add("done")
-			} catch (err) {
-				console.error("Error during scan:", err)
-				document.getElementById("scan-result").innerHTML =
-					"Gagal menjalankan scan."
-				clearInterval(interval)
-				progressBar.style.width = "100%"
-				progressBar.innerText = "Error"
-				progressBar.style.backgroundColor = "#dc3545"
-			}
-		})
-
-	// Dropdown bahasa event
-	document
-		.getElementById("dropdown-bahasa")
-		.addEventListener("change", async function () {
-			const lang = this.value
-			currentLang = lang
-			if (!originalResult) return // Belum ada hasil scan
-			if (lang === "id") {
-				// Translasi jika belum pernah translasi
-				if (!translatedResult) {
-					translatedResult = await translateResults(originalResult, "id")
-				}
-				await renderScanResult(translatedResult)
-			} else {
-				await renderScanResult(originalResult)
-			}
-		})
-	function showTranslateOverlay() {
-		document.getElementById("translate-overlay").style.display = "flex"
-	}
-	function hideTranslateOverlay() {
-		document.getElementById("translate-overlay").style.display = "none"
-	}
-	document
-		.getElementById("dropdown-bahasa")
-		.addEventListener("change", async function () {
-			const lang = this.value
-			currentLang = lang
-			if (!originalResult) return
-			if (lang === "id") {
-				showTranslateOverlay()
-				if (!translatedResult) {
-					translatedResult = await translateResults(originalResult, "id")
-				}
-				await renderScanResult(translatedResult)
-				hideTranslateOverlay()
-			} else {
-				await renderScanResult(originalResult)
-			}
-		})
-	// Toggle ZAP list
-	window.toggleZapList = function (id) {
-		const el = document.getElementById(id)
-		if (el) el.style.display = el.style.display === "none" ? "block" : "none"
-	}
-})
+            } catch (err) {
+                clearInterval(timer);
+                progressBar.classList.add("error");
+                alert("Scan Error: " + err.message);
+                toggleOverlay(false);
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove("btn-disabled");
+                btn.innerText = "Mulai Pengujian Keamanan";
+            }
+        });
+    }
+    
+    // --- Bahasa Handler ---
+    document.getElementById("dropdown-bahasa")?.addEventListener("change", async function () {
+        const lang = this.value;
+        if (!originalResult) return;
+        if (lang === "id") {
+            toggleOverlay(true);
+            await new Promise(r => setTimeout(r, 100));
+            if (!translatedResult) translatedResult = await translateResults(originalResult, "id");
+            await renderScanResult(translatedResult);
+            toggleOverlay(false);
+        } else {
+            await renderScanResult(originalResult);
+        }
+    });
+});

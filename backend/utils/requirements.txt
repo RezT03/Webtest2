@@ -1,10 +1,11 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 requests
 beautifulsoup4
-selenium
+drissionpage
 python-dotenv
 packaging
 PyPDF2
 python-owasp-zap-v2.4
-torch==2.5.0
-libretranslate==1.7.3
---index-url https://download.pytorch.org/whl/cpu
+torch==2.5.0+cpu
+argostranlsate[cpu]
+libretranslate

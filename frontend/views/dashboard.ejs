@@ -1,111 +1,196 @@
 <!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="UTF-8" />
-		<title>Dashboard</title>
-		<link rel="stylesheet" href="/css/style.css" />
-		<link
-			href="https://fonts.googleapis.com/css?family=Poppins:400,600&display=swap"
-			rel="stylesheet"
-		/>
-		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
-	</head>
-	<body>
-		<div class="container">
-			<div style="margin-bottom: 16px;">
-				<label for="dropdown-bahasa">Bahasa hasil scan:</label>
-				<select id="dropdown-bahasa">
-					<option value="en">English</option>
-					<option value="id">Bahasa Indonesia</option>
-				</select>
-			</div>
-			<h1>Dashboard Pengujian Keamanan Web</h1>
-			<form id="scan-form" action="/test/scan-all" method="POST">
-				<label for="url">Target URL:</label>
-				<input
-					type="text"
-					name="url"
-					id="url"
-					required
-					placeholder="http://localhost"
-				/>
-				<br />
-				<label>
-					<input type="checkbox" id="enable-dos" name="dos_enabled" />
-					Aktifkan DoS Attack
-				</label>
-				<div id="dos-options" style="display: none; margin-top: 10px">
-					<label for="dos_method">Metode DoS:</label>
-					<select name="dos_method" id="dos_method">
-						<option value="slowloris">Slowloris (Slow Headers)</option>
-						<option value="slowread">Slow Read</option>
-						<option value="rudy">RUDY (Slow POST)</option>
-						<option value="slowpost">Slow POST</option>
-					</select>
-					<small>Pilih teknik serangan DoS yang akan digunakan.</small>
-					<br />
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Dashboard</title>
+    <link href="https://fonts.googleapis.com/css?family=Poppins:400,500,600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Security Audit Dashboard</h1>
+            <div>
+                <select id="dropdown-bahasa">
+                    <option value="en">English</option>
+                    <option value="id">Bahasa Indonesia</option>
+                </select>
+            </div>
+        </div>
 
-					<label for="requests_num">Jumlah Request:</label>
-					<input type="number" name="requests_num" id="requests_num" />
-					<small>Banyaknya request yang akan dikirim ke server.</small>
-					<br />
+        <form id="scan-form" action="/test/scan-all" method="POST">
+            
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="url">Target URL / IP Address</label>
+                    <input type="text" name="url" id="url" required placeholder="example.com atau 192.168.1.1">
+                </div>
+                <div class="form-group">
+                    <label for="cookie_header">Session Cookie (Opsional - untuk scan area login)</label>
+                    <input type="text" name="cookie_header" id="cookie_header" placeholder="Connect.sid=...">
+                </div>
+            </div>
 
-					<label for="duration">Durasi (detik):</label>
-					<input type="number" name="duration" id="duration" />
-					<small>Lama waktu pengujian DoS dalam detik.</small>
-					<br />
+            <div class="scan-grid">
+                
+                <div class="card">
+                    <div class="card-title">Vulnerability Assessment</div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="tests" value="tech" class="calc-time" checked>
+                            <div>
+                                <strong>Tech & CVE Detection</strong>
+                                <div style="font-size:0.8em; color:#666;">Mendeteksi versi software web & database serta kerentanannya.</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
 
-					<label for="connections_per_page">Jumlah Koneksi per Page:</label>
-					<input
-						type="number"
-						name="connections_per_page"
-						id="connections_per_page"
-						value="100"
-					/>
-					<small>Jumlah koneksi simultan ke server.</small>
-					<br />
+                <div class="card">
+                    <div class="card-title">Injection Testing (Critical)</div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="tests" value="xss_sqli" class="calc-time" checked>
+                            <div>
+                                <strong>Input Injection (XSS & SQLi)</strong>
+                                <div style="font-size:0.8em; color:#666;">Menguji form dan parameter URL terhadap serangan injeksi.</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
 
-					<label for="packet_size">Ukuran Paket (bytes):</label>
-					<input type="number" name="packet_size" id="packet_size" />
-					<button type="button" id="auto-packet-size">Auto</button>
-					<small>
-						Klik "Auto" untuk mengisi otomatis berdasarkan ukuran halaman
-						target.
-					</small>
-					<br />
+                <div class="card">
+                    <div class="card-title">Server Misconfiguration</div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="tests" value="zap" class="calc-time">
+                            HTTP Headers & Misconfiguration (ZAP)
+                        </label>
+                        
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="tests" value="ssl" class="calc-time">
+                            SSL/TLS Security (SSLyze)
+                        </label>
 
-					<label for="cookie_header">Header Cookie (Opsional):</label>
-					<input type="text" name="cookie_header" id="cookie_header" />
-					<small>Isi jika aplikasi butuh autentikasi/session.</small>
-					<br />
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="tests" value="nmap" id="enable-nmap" class="calc-time">
+                            Port Scanning (Nmap)
+                        </label>
+                        
+                        <div id="nmap-options" class="sub-options">
+                            <label style="font-weight:600; font-size:0.8em;">Target Ports:</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="nmap_ports" value="top100" class="calc-time"> Top 100</label>
+                                <label><input type="radio" name="nmap_ports" value="top1000" class="calc-time" checked> Top 1000</label>
+                                <label><input type="radio" name="nmap_ports" value="all" class="calc-time"> All Ports</label>
+                                <label><input type="radio" name="nmap_ports" value="specific" class="calc-time"> Specific</label>
+                            </div>
+                            <div style="margin-top:8px;">
+                                <label class="checkbox-item"><input type="checkbox" value="sV" name="nmap_show_service" checked> Deteksi Versi Service (-sV)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-					<label>
-						<input type="checkbox" id="stop-on-down" name="stop_on_down" />
-						Stop on Down
-					</label>
-					<small>Berhenti otomatis jika server terdeteksi down.</small>
-					<br />
-				</div>
-				<button type="submit">Mulai Pengujian</button>
-			</form>
-			<div id="progress-container">
-				<div id="progress-bar">0%</div>
-			</div>
-			<div
-				id="progress-status"
-				style="margin-top: 8px; color: #555; font-size: 1em"
-			></div>
-			<div id="scan-result"></div>
-			<div id="dos-graph" style="max-width: 800px; margin: 0 auto">
-				<canvas id="dosChart" style="height: 350px; max-width: 100%"></canvas>
-			</div>
-		</div>
-		<div id="translate-overlay">
-			<div>
-				<span>Menerjemahkan...</span>
-			</div>
-		</div>
-		<script src="/js/dashboard.js"></script>
-	</body>
+                <div class="card">
+                    <div class="card-title">Rate Limiting</div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="tests" value="ratelimit" id="enable-ratelimit" class="calc-time">
+                            <strong>Rate Limit / Bot Protection Test</strong>
+                        </label>
+                        
+                        <div id="ratelimit-options" class="sub-options">
+                            <label style="font-weight:600; font-size:0.8em;">Level Pengujian:</label>
+                            <select name="ratelimit_level" id="ratelimit-level" class="calc-time" style="width:100%; margin-top:5px;">
+                                <option value="1">Level 1: Ringan (50 Request)</option>
+                                <option value="2">Level 2: Sedang (250 Request)</option>
+                                <option value="3">Level 3: Berat (1000 Request)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+            </div> <div style="margin-top: 20px;">
+                <label class="checkbox-item">
+                    <input type="checkbox" id="select-all" class="calc-time"> 
+                    <strong>Pilih Semua Pengujian</strong>
+                </label>
+            </div>
+
+            <div style="margin-top: 20px; padding: 10px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 8px; text-align: center; font-weight: 600;">
+                Estimasi Waktu Pengujian: <span id="estimated-time">0 detik</span><br>
+                <small>Waktu pengujian dapat lebih cepat atau lebih lambat tergantung pada kecepatan internet anda dan kecepatan target</small>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <button type="submit" class="btn-submit" id="btn-start-scan">Mulai Analisis Keamanan</button>
+            </div>
+        </form>
+
+        <div id="progress-container">
+            <div id="progress-bar">0%</div>
+        </div>
+        <div id="progress-status"></div>
+        <div id="scan-result"></div>
+        
+        <div id="dos-graph" style="max-width: 100%; margin-top: 20px; display: none;">
+            <canvas id="dosChart" style="height: 300px;"></canvas>
+        </div>
+    </div>
+
+    <div id="translate-overlay">Menerjemahkan Laporan...
+        <div style="margin-top: 5px;">
+            Mohon tunggu sebentar <br>
+            <small>proses ini dapat memakan waktu hingga beberapa menit tergantung pada banyaknya kerentanan yang ditemukan dan kemampuan perangkat anda</small>
+        </div>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+    <script>
+        // Toggle Display
+        document.getElementById('enable-nmap').addEventListener('change', function() {
+            document.getElementById('nmap-options').style.display = this.checked ? 'block' : 'none';
+        });
+        document.getElementById('enable-ratelimit').addEventListener('change', function() {
+            document.getElementById('ratelimit-options').style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Kalkulator Waktu
+        function calculateTime() {
+            let totalSeconds = 0;
+            if (document.querySelector('input[name="tests"][value="tech"]').checked) totalSeconds += 45;
+            if (document.querySelector('input[name="tests"][value="xss_sqli"]').checked) totalSeconds += 30;
+            if (document.querySelector('input[name="tests"][value="zap"]').checked) totalSeconds += 120;
+            if (document.querySelector('input[name="tests"][value="ssl"]').checked) totalSeconds += 20;
+            if (document.querySelector('input[name="tests"][value="nmap"]').checked) {
+                const portOpt = document.querySelector('input[name="nmap_ports"]:checked').value;
+                if (portOpt === 'all') totalSeconds += 400; 
+                else if (portOpt === 'specific') totalSeconds += 60;
+                else if (portOpt === "sV") totalSeconds += 20
+                else totalSeconds += 15; 
+            }
+            if (document.querySelector('input[name="tests"][value="ratelimit"]').checked) {
+                const level = document.getElementById('ratelimit-level').value;
+                if (level == '1') totalSeconds += 4;
+                else if (level == '2') totalSeconds += 8;
+                else if (level == '3') totalSeconds += 40;
+            }
+
+            let timeText = totalSeconds >= 60 
+                ? `${Math.floor(totalSeconds / 60)} menit ${totalSeconds % 60} detik` 
+                : `${totalSeconds} detik`;
+            document.getElementById('estimated-time').innerText = `~ ${timeText} (Maksimal)`;
+        }
+
+        // Attach listener to all calc-time inputs
+        document.querySelectorAll('.calc-time').forEach(el => {
+            el.addEventListener('change', calculateTime);
+        });
+        // Init
+        calculateTime();
+    </script>
+</body>
 </html>

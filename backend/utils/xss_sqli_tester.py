@@ -26,9 +26,9 @@ def test_injection(url, method, action, inputs, payloads, type='xss'):
         target = action if action.startswith('http') else url.rstrip('/') + '/' + action.lstrip('/')
         try:
             if method.lower() == 'get':
-                r = requests.get(target, params=data, timeout=5, allow_redirects=False)
+                r = requests.get(target, params=data, timeout=15, allow_redirects=False)
             else:
-                r = requests.post(target, data=data, timeout=5, allow_redirects=False)
+                r = requests.post(target, data=data, timeout=15, allow_redirects=False)
 
             if type == 'xss' and any(p in r.text for p in [payload]):
                 results.append({'payload': payload, 'result': 'XSS tercermin'})

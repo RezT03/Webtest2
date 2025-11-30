@@ -5,6 +5,7 @@ drissionpage
 python-dotenv
 packaging
 PyPDF2
+sslyze
 python-owasp-zap-v2.4
 torch==2.5.0+cpu
 argostranlsate[cpu]

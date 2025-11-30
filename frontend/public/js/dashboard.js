@@ -346,7 +346,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const timer = setInterval(() => { 
                 if(w < 95) { w += 0.5; progressBar.style.width = w+"%"; progressBar.innerText = Math.floor(w)+"%"; }
             }, 500);
-            document.getElementById("progress-status").innerHTML = `Selesai dalam <strong>${formatDuration(Date.now()-start)}</strong>`;
+            // document.getElementById("progress-status").innerHTML = `Selesai dalam <strong>${formatDuration(Date.now()-start)}</strong>`;
             try {
                 const formData = new FormData(this);
                 const payload = {

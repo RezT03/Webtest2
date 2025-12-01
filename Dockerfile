@@ -1,72 +1,84 @@
-# ---------- STAGE 1: BUILDER (membangun wheel dan assets)
-FROM node:20-slim AS builder
-ARG DEBIAN_FRONTEND=noninteractive
-WORKDIR /build
+# ==========================================
+# STAGE 1: Node.js Builder (Untuk install modul npm)
+# ==========================================
+FROM node:22-slim AS node_builder
 
-# Install paket sistem yang mungkin diperlukan untuk membangun dependensi Python/Node
-# (Catatan: ini hanya di stage builder — tidak ikut ke runtime)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
-    build-essential \
-    gcc \
-    g++ \
-    make \
-    curl \
-    ca-certificates \
-    git \
- && rm -rf /var/lib/apt/lists/*
-
-# Copy hanya file requirements dan package.json untuk memanfaatkan cache Docker
-COPY backend/utils/requirements.txt ./utils/requirements.txt
-COPY package.json package-lock.json ./   # jika project root memiliki package.json (sesuaikan path)
-
-# Build Python wheels (jika ada dependensi yang perlu dikompile)
-RUN pip3 wheel --no-cache-dir --wheel-dir /wheels -r ./utils/requirements.txt
-
-# Install node modules & build frontend/backend assets if needed (optional)
-# Jika aplikasi Anda tidak mempunyai step npm build, baris berikut tidak berpengaruh.
-COPY . .
-RUN if [ -f package.json ]; then npm ci --silent --no-audit --no-fund || true; fi
-# Jika Anda punya script build (mis: npm run build), jalankan di sini:
-# RUN if [ -f package.json ] && grep -q "\"build\"" package.json; then npm run build; fi
-
-# ---------- STAGE 2: RUNTIME (lebih ramping, berisi runtime packages yang sama seperti Dockerfile asli) ----------
-FROM node:20-slim AS runtime
-ARG DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# Install paket runtime yang sama seperti yang Anda gunakan (pertahankan dependency)
-# Jika Dockerfile asli Anda punya paket tambahan, tambahkan di sini.
+# Copy file package manager
+COPY package*.json ./
+# Jika ada package.json di backend, copy juga (sesuaikan struktur Anda)
+# COPY backend/package*.json ./backend/
+
+# Install dependencies (Hanya production untuk menghemat size)
+# Kita install semua dulu agar 'concurrently' jalan, nanti di pruning
+RUN npm install
+
+# ==========================================
+# STAGE 2: Final Image (Python + System Tools)
+# ==========================================
+FROM python:3.11-slim-bookworm
+
+# Set Environment Variables agar Python & Docker lebih optimal
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    # Konfigurasi lokasi Chrome untuk DrissionPage
+    CHROME_BIN=/usr/bin/chromium \
+    CHROMEDRIVER_PATH=/usr/bin/chromedriver
+
+WORKDIR /app
+
+# 1. Install System Dependencies (Layer ini di-cache)
+# - openjdk-17-jre: Wajib untuk ZAP
+# - nmap: Wajib untuk Nmap Scan
+# - chromium & driver: Wajib untuk DrissionPage
+# - nodejs & npm: Wajib untuk menjalankan server Express
+# - curl/wget: Untuk download ZAP
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
+    openjdk-17-jre \
+    nmap \
     chromium \
     chromium-driver \
-    openjdk-17-jre-headless \
-    slowhttptest \
-    ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+    nodejs \
+    npm \
+    wget \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy built wheels dari builder dan install packages dari wheels untuk menghindari compile ulang
-COPY --from=builder /wheels /wheels
-COPY backend/utils/requirements.txt ./utils/requirements.txt
-RUN if [ -d /wheels ]; then pip3 install --no-index --no-cache-dir --find-links=/wheels -r ./utils/requirements.txt || pip3 install --no-cache-dir -r ./utils/requirements.txt; else pip3 install --no-cache-dir -r ./utils/requirements.txt; fi
+# 2. Install ZAP (Download otomatis agar tidak perlu upload folder besar)
+# Kita download versi 2.16.0 (atau sesuaikan) dan ekstrak ke /app/ZAP_2.16.1
+# Ini penting agar path ZAPScanner.py Anda ("../../ZAP_2.16.1/zap.sh") tetap valid.
+# ARG ZAP_VERSION=2.16.0
+# RUN wget -q https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz \
+#     && tar -xzf ZAP_${ZAP_VERSION}_Linux.tar.gz \
+#     && mv ZAP_${ZAP_VERSION} ZAP_2.16.1 \
+#     && rm ZAP_${ZAP_VERSION}_Linux.tar.gz
 
-# Salin hanya file yang diperlukan ke image runtime (hindari copy . secara keseluruhan)
-# Sesuaikan paths berikut dengan struktur proyek Anda
-COPY backend/ ./backend/
-# Jika ada frontend build artifacts (dari builder), salin dari builder jika diperlukan:
-# COPY --from=builder /build/dist ./frontend/dist
+# 3. Install Python Dependencies
+COPY backend/utils/requirements.txt ./backend/utils/
 
-# Set working dir sesuai entrypoint original Anda (lihat Dockerfile awal)
-WORKDIR /app/backend
+# OPTIMASI UKURAN: Gunakan PyTorch versi CPU (Hemat ~700MB dibanding versi GPU)
+# Kita install torch cpu secara eksplisit sebelum requirements lainnya
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r backend/utils/requirements.txt
 
-# Expose port yang diperlukan
-EXPOSE 3001
+# 4. Copy Project Files
+# Copy node_modules dari Stage 1
+COPY --from=node_builder /app/node_modules ./node_modules
+# Copy seluruh kode sumber aplikasi
+COPY . .
 
-ENV PYTHONUNBUFFERED=1
-ENV NODE_ENV=production
+# 5. Setup Permissions (Opsional, tapi baik untuk keamanan)
+# chmod zap.sh agar bisa dieksekusi
+# RUN chmod +x ZAP_2.16.1/zap.sh
 
-# Jalankan aplikasi: tetap menggunakan perintah yang sama seperti di Dockerfile anda
-CMD ["node", "app.js"]
+# 6. Expose Ports
+# 3001: Dashboard Node.js
+# 5000: LibreTranslate (Flask)
+EXPOSE 3001 5000
+
+# 7. Start Command
+# Menjalankan npm run dev (concurrently node & python)
+CMD ["npm", "run", "dev"]

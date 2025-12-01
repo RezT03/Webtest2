@@ -247,141 +247,141 @@
         </serverCertificates>
         <localServers version="1"/>
         <ratelimit version="1"/>
-        <globalExclusions version="1">
+        <globalExclusions version="2">
             <exclusions>
                 <exclusion>
                     <name>Extension - Image (ends with .extension)</name>
-                    <value>^.*\.(?:gif|jpe?g|png|ico|icns|bmp)$</value>
+                    <value>(?i)^.*\.(?:gif|jpe?g|png|ico|icns|bmp|svg|webp)$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Extension - Audio/Video (ends with .extension)</name>
-                    <value>^.*\.(?:mp[34]|mpe?g|m4[ap]|aac|avi|mov|wmv|og[gav])$</value>
+                    <value>(?i)^.*\.(?:mp[34]|mpe?g|m4[ap]|aac|avi|mov|wmv|og[gav]|webm)$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Extension - PDF &amp; Office (ends with .extension)</name>
-                    <value>^.*\.(?:pdf|docx?|xlsx?|pptx?)$</value>
+                    <value>(?i)^.*\.(?:pdf|docx?|xlsx?|pptx?)$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Extension - Stylesheet, JavaScript (ends with .extension)</name>
-                    <value>^.*\.(?:css|js)$</value>
+                    <value>(?i)^.*\.(?:css|js)$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Extension - Flash &amp; related (ends with .extension)</name>
-                    <value>^.*\.(?:sw[fa]|flv)$</value>
+                    <value>(?i)^.*\.(?:sw[fa]|flv)$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>ExtParam - Image (extension plus ?params=values)</name>
-                    <value>^[^\?]*\.(?:gif|jpe?g|png|ico|icns|bmp)\?.*$</value>
+                    <value>(?i)^[^\?]*\.(?:gif|jpe?g|png|ico|icns|bmp|svg|webp)\?.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>ExtParam - Audio/Video (extension plus ?params=values)</name>
-                    <value>^[^\?]*\.(?:mp[34]|mpe?g|m4[ap]|aac|avi|mov|wmv|og[gav])\?.*$</value>
+                    <value>(?i)^[^\?]*\.(?:mp[34]|mpe?g|m4[ap]|aac|avi|mov|wmv|og[gav]|webm)\?.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>ExtParam - PDF &amp; Office (extension plus ?params=values)</name>
-                    <value>^[^\?]*\.(?:pdf|docx?|xlsx?|pptx?)\?.*$</value>
+                    <value>(?i)^[^\?]*\.(?:pdf|docx?|xlsx?|pptx?)\?.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>ExtParam - Stylesheet, JavaScript (extension plus ?params=values)</name>
-                    <value>^[^\?]*\.(?:css|js)\?.*$</value>
+                    <value>(?i)^[^\?]*\.(?:css|js)\?.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>ExtParam - Flash &amp; related (extension plus ?params=values)</name>
-                    <value>^[^\?]*\.(?:sw[fa]|flv)\?.*$</value>
+                    <value>(?i)^[^\?]*\.(?:sw[fa]|flv)\?.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
-                    <name>ExtParam - .NET adx resources (SR/WR.adx?d=)</name>
-                    <value>^[^\?]*/(?:WebResource|ScriptResource)\.axd\?d=.*$</value>
+                    <name>ExtParam - .NET axd resources (SR/WR.axd?d=)</name>
+                    <value>(?i)^[^\?]*/(?:WebResource|ScriptResource)\.axd\?d=.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Bing API queries</name>
-                    <value>^https?://api\.bing\.com/qsml\.aspx?query=.*$</value>
+                    <value>(?i)^https?://api\.bing\.com/qsml\.aspx?query=.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Google malware detector updates</name>
-                    <value>^https?://(?:safebrowsing-cache|sb-ssl|sb|safebrowsing).*\.(?:google|googleapis)\.com/.*$</value>
+                    <value>(?i)^https?://(?:safebrowsing-cache|sb-ssl|sb|safebrowsing).*\.(?:google|googleapis)\.com/.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Lastpass manager</name>
-                    <value>^https?://(?:[^/])*\.?lastpass\.com</value>
+                    <value>(?i)^https?://(?:[^/])*\.?lastpass\.com</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Firefox browser updates</name>
-                    <value>^https?://(?:.*addons|aus[0-9])\.mozilla\.(?:org|net|com)/.*$</value>
+                    <value>(?i)^https?://(?:.*addons|aus[0-9])\.mozilla\.(?:org|net|com)/.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Firefox extensions phoning home</name>
-                    <value>^https?://(?:[^/])*\.?(?:getfoxyproxy\.org|getfirebug\.com|noscript\.net)</value>
+                    <value>(?i)^https?://(?:[^/])*\.?(?:getfoxyproxy\.org|getfirebug\.com|noscript\.net)</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Microsoft Windows updates</name>
-                    <value>^https?://(?:.*update\.microsoft|.*\.windowsupdate)\.com/.*$</value>
+                    <value>(?i)^https?://(?:.*update\.microsoft|.*\.windowsupdate)\.com/.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Google Chrome extension updates</name>
-                    <value>^https?://clients2\.google\.com/service/update2/crx.*$</value>
+                    <value>(?i)^https?://clients2\.google\.com/service/update2/crx.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Firefox captive portal detection</name>
-                    <value>^https?://detectportal\.firefox\.com.*$</value>
+                    <value>(?i)^https?://detectportal\.firefox\.com.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Google Analytics</name>
-                    <value>^https?://www\.google-analytics\.com.*$</value>
+                    <value>(?i)^https?://www\.google-analytics\.com.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Firefox h264 codec download</name>
-                    <value>^https?://ciscobinary\.openh264\.org.*$</value>
+                    <value>(?i)^https?://ciscobinary\.openh264\.org.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Fonts CDNs such as fonts.gstatic.com, etc.</name>
-                    <value>^https?://fonts.*$</value>
+                    <value>(?i)^https?://fonts.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Mozilla CDN (requests such as getpocket)</name>
-                    <value>^https?://.*\.cdn\.mozilla\.(?:com|org|net)/.*$</value>
+                    <value>(?i)^https?://.*\.cdn\.mozilla\.(?:com|org|net)/.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Firefox browser telemetry</name>
-                    <value>^https?://.*\.telemetry\.mozilla\.(?:com|org|net)/.*$</value>
+                    <value>(?i)^https?://.*\.telemetry\.mozilla\.(?:com|org|net)/.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Adblockplus updates and notifications</name>
-                    <value>^https?://.*\.adblockplus\.org.*$</value>
+                    <value>(?i)^https?://.*\.adblockplus\.org.*$</value>
                     <enabled>false</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Firefox services</name>
-                    <value>^https?://.*\.services\.mozilla\.com.*$</value>
+                    <value>(?i)^https?://.*\.services\.mozilla\.com.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
                 <exclusion>
                     <name>Site - Google updates</name>
-                    <value>^https?://.*\.gvt1\.com.*$</value>
+                    <value>(?i)^https?://.*\.gvt1\.com.*$</value>
                     <enabled>true</enabled>
                 </exclusion>
             </exclusions>
@@ -433,6 +433,6 @@
         <thread>24</thread>
     </spider>
     <start>
-        <dayLastChecked>2025-11-27</dayLastChecked>
+        <dayLastChecked>2025-11-30</dayLastChecked>
     </start>
 </config>

@@ -207,6 +207,7 @@ select:focus {
     cursor: not-allowed;
     transform: none !important;
     box-shadow: none !important;
+    
 }
 
 /* --- PROGRESS BAR --- */

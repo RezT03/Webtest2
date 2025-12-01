@@ -1,7 +1,7 @@
 {
 	"scripts": {
 		"start": "nodemon ./backend/app.js",
-		"dev": "concurrently \"npx nodemon ./backend/app.js\" \"libretranslate --load-only en,id --debug\"",
+		"dev": "concurrently \"npx nodemon ./backend/app.js\" \"libretranslate --host 0.0.0.0 --load-only en,id --debug\"",
 		"build": "echo 'No build step required for this project'",
 		"test": "echo 'No test step required for this project'"
 	},

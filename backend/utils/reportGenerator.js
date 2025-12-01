@@ -14,7 +14,7 @@ function generatePDF(data, res, imageBase64 = null, language = 'id') {
     doc.image(logoPath, 450, 15, { width: 100 });
   }
 
-  doc.fontSize(18).text('Laporan Pengujian Keamanan Web', 50, 50, { underline: true });
+  doc.fontSize(18).text('Laporan Pengujian Keamanan Web', 50, 50, { underline: true })
   doc.moveDown();
 
   data.forEach((entry, index) => {

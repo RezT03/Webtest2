@@ -10,48 +10,53 @@ const dashboardRoutes = require("./routes/dashboard")
 const testRoutes = require("./routes/test")
 const historyRoutes = require("./routes/history")
 
-
 const app = express()
 app.use(cors())
 
-console.log('Starting server...')
+console.log("Starting server...")
 
-app.use(express.static(path.join(__dirname, '../frontend/public')))
-console.log('Static middleware set')
+app.use(express.static(path.join(__dirname, "../frontend/public")))
+console.log("Static middleware set")
 
 app.set("view engine", "ejs")
-app.set("views", path.join(__dirname, '../frontend/views'))
-console.log('View engine configured')
+app.set("views", path.join(__dirname, "../frontend/views"))
+console.log("View engine configured")
 
-app.use(bodyParser.urlencoded({ extended: false }))
-app.use(bodyParser.json())
+// Middleware
+app.use(express.json({ limit: "50mb" }))
+app.use(express.urlencoded({ limit: "50mb", extended: true }))
+
+// Serve static files
+app.use(express.static(path.join(__dirname, "public")))
+
+// Optional: Explicit route untuk downloads
 app.use(
-	session({
-		secret: "websecsecret",
-		resave: false,
-		saveUninitialized: true,
-	}),
+	"/static/downloads",
+	express.static(path.join(__dirname, "public/static/downloads")),
 )
 
-//DEV.BYPASS.LOGIN
-app.use((req, res, next) => {
-  req.session.userId = 1 
-  next()
-})
-//DEL.ON.PROD
-
+// Routes
+app.use("/test", require("./routes/test"))
 app.use("/", dashboardRoutes)
-app.get("/", (req, res) => { 
-	  res.redirect("/dashboard")
+app.get("/", (req, res) => {
+	res.redirect("/dashboard")
 })
 app.use("/dashboard", dashboardRoutes)
 app.use("/test", testRoutes)
 app.use("/history", historyRoutes)
-console.log('All routes configured')
+console.log("All routes configured")
 
-app.listen(3001, () => {
-    console.log("Server running on http://localhost:3001")
-}).setTimeout(600000)
+// Error handler
+app.use((err, req, res, next) => {
+	console.error("Express error:", err)
+	res.status(500).json({ error: err.message })
+})
 
+const PORT = process.env.PORT || 3001
+app
+	.listen(PORT, () => {
+		console.log(`Server running on port ${PORT}`)
+	})
+	.setTimeout(600000)
 
 module.exports = app

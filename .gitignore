@@ -313,6 +313,7 @@ last_page_source.html
 
 #libretranslate cache
 db
+reports/
 
 #exclusion
 !ZAP_2.16.1/lib

@@ -1,0 +1,10 @@
+{
+  "verbose": true,
+  "ignore": [
+    "frontend/public/reports/*.pdf",
+    "backend/*.json",
+    "backend/utils/*.log",
+    "temp_scan_*.json",
+    "ZAP_2.16.1"
+  ]
+}

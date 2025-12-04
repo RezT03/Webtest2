@@ -110,8 +110,9 @@ def run_rate_limit_test(target_url, level=1):
             
             if code == 200: stats["success"] += 1
             elif code in [429, 403]: stats["blocked"] += 1
-            elif code < 0 or code >= 500: stats["error"] += 1 # Error/Timeout
-            else: pass # Redirect 3xx dihitung sukses konek
+            # elif code == 415: stats["media err"]
+            elif code < 0 or code >= 500 and code == 415: stats["error"] += 1 # Error/Timeout
+            else: pass
             
             # Labeling kode untuk laporan
             if code == -1: c_str = "Reset"

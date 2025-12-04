@@ -27,9 +27,24 @@
                     <label for="url">URL Target</label>
                     <select name="url" id="url" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-family: inherit;">
                         <option value="" disabled selected>-- Pilih Target Pengujian --</option>
-                        <option value="http://unsiq.ac.id">unsiq.ac.id (Website Utama)</option>
-                        <option value="https://mhs.unsiq.ac.id">mhs.unsiq.ac.id (Portal Mahasiswa)</option>
+                        <optgroup label="Website utama">
+                            <option value="https://mhs.unsiq.ac.id/index.php">mhs.unsiq.ac.id (Portal Mahasiswa)</option>
+                            <option value="http://unsiq.ac.id">unsiq.ac.id</option>
+                            <option value="kerjasama.unsiq.ac.id">kerjasama.unsiq.ac.id</option>
+                        </optgroup>
+                        <optgroup label="Website fakultas">
+                            <option value="http://web.fastikom-unsiq.ac.id">fastikom-unsiq.ac.id</option>
+                            <option value="http://fitk.unsiq.ac.id/">fitk.unsiq.ac.id</option>
+                            <option value="http://fsh.unsiq.ac.id/">fsh.unsiq.ac.id</option>
+                            <option value="http://feb-unsiq.ac.id">feb-unsiq.ac.id</option>
+                            <option value="http://www.fksp.unsiq.ac.id">fksp.unsiq.ac.id</option>
+                            <option value="http://www.fbs.unsiq.ac.id">www.fbs.unsiq.ac.id</option>
+                            <option value="http://fikes.unsiq.ac.id">fikes.unsiq.ac.id</option>
+                        </optgroup>
+                        <optgroup label="test server">
                         <option value="http://restuproduction.com">restuproduction.com (Server Test)</option>
+                        <option value="http://yogaar.my.id">yogaar.my.id (vuln target)</option>
+                        </optgroup>
                         </select>
                 </div>
                 <div class="form-group">
@@ -97,7 +112,7 @@
                             </div>
                             <div style="margin-top:8px;">
                                 <label class="checkbox-item"><input type="checkbox" name="nmap_show_os"> Deteksi OS</label>
-                                <label class="checkbox-item"><input type="checkbox" name="nmap_show_service" value="sV" class="calc-time" checked> Deteksi Versi Service (-sV)</label>
+                                <label class="checkbox-item"><input type="checkbox" name="nmap_show_service" value="sV" class="calc-time" checked> Deteksi layanan (-sV)</label>
                             </div>
                         </div>
                     </div>
@@ -131,7 +146,8 @@
             </div>
 
             <div style="margin-top: 20px; padding: 10px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 8px; text-align: center; font-weight: 600;">
-                Estimasi Waktu Pengujian: <span id="estimated-time">0 detik</span>
+                Estimasi Waktu Pengujian: <span id="estimated-time">0 detik</span><br>
+                <small>Pengujian dapat lebih cepat atau lebih lambat tergantung kecepatan internet yanganda gunakan dan kondisi server target</small>
             </div>
 
             <div style="margin-top: 15px;">
@@ -143,15 +159,16 @@
             <div id="progress-bar">0%</div>
         </div>
         <div id="progress-status"></div>
+        
+        <!-- AREA HASIL SCAN -->
         <div id="scan-result"></div>
         
-        <div id="dos-graph" style="max-width: 100%; margin-top: 20px; display: none;">
-            <canvas id="dosChart" style="height: 300px;"></canvas>
-        </div>
+        <!-- STATIK CANVAS DIHAPUS UNTUK MENGHINDARI KONFLIK ID -->
+
     </div>
 
     <div id="translate-overlay">
-        <div style="font-size: 1.5rem; margin-top: 15px; font-weight:bold;">Menerjemahkan Laporan...</div>
+        <div style="font-size: 1.5rem; margin-top: 15px; font-weight:bold;">Menerjemahkan Laporan...</div><br>
         <div style="margin-top: 5px;">Mohon tunggu sebentar</div>
     </div>
 
@@ -196,9 +213,9 @@
                 const levelEl = document.getElementById('ratelimit-level');
                 const level = levelEl ? levelEl.value : '1';
                 
-                if (level == '1') totalSeconds += 4;
-                else if (level == '2') totalSeconds += 8;
-                else if (level == '3') totalSeconds += 40;
+                if (level == '1') totalSeconds += 6;
+                else if (level == '2') totalSeconds += 25;
+                else if (level == '3') totalSeconds += 45;
             }
 
             let timeText = totalSeconds >= 60 
@@ -206,7 +223,7 @@
                 : `${totalSeconds} detik`;
             
             const output = document.getElementById('estimated-time');
-            if(output) output.innerText = `~ ${timeText} (Maksimal)`;
+            if(output) output.innerText = `~ ${timeText}`;
         }
 
         document.querySelectorAll('.calc-time').forEach(el => el.addEventListener('change', calculateTime));

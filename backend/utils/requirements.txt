@@ -4,7 +4,9 @@ beautifulsoup4
 drissionpage
 python-dotenv
 packaging
-PyPDF2
+pdfkit
+jinja2
+xhtml2pdf
 sslyze
 python-owasp-zap-v2.4
 torch==2.5.0+cpu

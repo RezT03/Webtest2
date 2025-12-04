@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Laporan Audit Keamanan</title>
+    <style>
+        /* xhtml2pdf hanya support CSS 2.1. Jangan guna Flex/Grid. */
+        @page { size: A4; margin: 1cm; }
+        body { font-family: Helvetica, sans-serif; color: #333; font-size: 12px; line-height: 1.5; }
+        
+        /* Header */
+        .header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { margin: 0; color: #1e293b; font-size: 24px; }
+        .meta { font-size: 10px; color: #666; margin-top: 5px; }
+        
+        /* Score Card (Table Layout) */
+        .score-table { width: 100%; margin-bottom: 20px; background-color: #f8fafc; border: 1px solid #ddd; }
+        .score-td { padding: 15px; text-align: center; vertical-align: middle; }
+        
+        .grade-val { font-size: 40px; font-weight: bold; }
+        .grade-A { color: #10b981; } .grade-B { color: #3b82f6; } 
+        .grade-C { color: #ffaa00; } .grade-D, .grade-F { color: #ef4444; }
+        
+        /* Tables */
+        .data-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        .data-table th, .data-table td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; }
+        .data-table th { background-color: #f1f5f9; font-weight: bold; color: #334155; }
+        
+        /* Badges (Simulasi dengan span) */
+        .badge { background-color: #eee; padding: 2px 4px; font-size: 9px; border-radius: 2px; color: #000; }
+        .bg-Critical { background-color: #000000; color: #fff; }
+        .bg-High { background-color: #dc2626; color: #fff; }
+        .bg-Medium { background-color: #ea580c; color: #fff; }
+        .bg-Low { background-color: #ffea00; color: #000; }
+        
+        /* Typography */
+        h2 { background-color: #1e293b; color: white; padding: 5px 10px; font-size: 14px; margin-top: 20px; }
+        h3 { color: #2563eb; border-bottom: 1px solid #eee; padding-bottom: 3px; font-size: 13px; margin-top: 15px; }
+        
+        .section-skip { color: #94a3b8; font-style: italic; padding: 10px; border: 1px dashed #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Laporan Teknis Audit Keamanan</h1>
+        <div class="meta">Target: <strong>{{ target_url }}</strong> | Tanggal: {{ scan_date }}</div>
+    </div>
+
+    <table class="score-table">
+        <tr>
+            <td class="score-td" width="30%">
+                <div class="grade-val grade-{{ security_score.final_score }}">{{ security_score.final_score }}</div>
+                <div style="font-size:10px; color:#666;">Skor Akhir</div>
+            </td>
+            <td class="score-td" style="text-align:left;">
+                <h3 style="margin-top:0;">Ringkasan Eksekutif</h3>
+                <p><strong>Status:</strong> {{ impact_analysis.label }}</p>
+                <p>{{ impact_analysis.summary }}</p>
+                <div style="margin-top:5px; font-size:10px; color:#555;">
+                    Software Health: <b>{{ security_score.cve_score }}</b> | App Security: <b>{{ security_score.zap_score }}</b>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <h2>1. Vulnerability Assessment</h2>
+    
+    <h3>Teknologi Terdeteksi</h3>
+    {% if tech %}
+        <p>{{ tech|join(', ') }}</p>
+    {% else %}
+        <div class="section-skip">Tidak ada teknologi spesifik terdeteksi.</div>
+    {% endif %}
+
+    <h3>Common Vulnerabilities (CVE)</h3>
+    {% if cves %}
+    <table class="data-table">
+        <thead><tr><th width="20%">Software</th><th width="15%">CVE ID</th><th width="40%">Deskripsi</th><th width="10%">CVSS</th><th width="15%">Solusi</th></tr></thead>
+        <tbody>
+        {% for cve in cves %}
+            <tr>
+                <td><b>{{ cve.software }}</b></td>
+                <td>{{ cve.cve_id }}</td>
+                <td>{{ cve.description }}</td>
+                <td><span class="badge bg-{{ cve.risk_label }}">{{ cve.cvss_score }}</span></td>
+                <td>{{ cve.solution }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="section-skip">Tidak ditemukan kerentanan publik (CVE).</div>
+    {% endif %}
+
+    <h2>2. Injection Testing</h2>
+    {% if xss_results or sqli_results %}
+        {% if xss_results %}
+            <h3>Cross-Site Scripting (XSS)</h3>
+            <table class="data-table">
+                <tr><th>Endpoint</th><th>Payload</th><th>Hasil</th></tr>
+                {% for res in xss_results %}
+                <tr><td>{{ res.endpoint }}</td><td><code>{{ res.payload }}</code></td><td style="color:red;">{{ res.result }}</td></tr>
+                {% endfor %}
+            </table>
+        {% endif %}
+        {% if sqli_results %}
+            <h3>SQL Injection</h3>
+            <table class="data-table">
+                <tr><th>Endpoint</th><th>Payload</th><th>Hasil</th></tr>
+                {% for res in sqli_results %}
+                <tr><td>{{ res.endpoint }}</td><td><code>{{ res.payload }}</code></td><td style="color:red;">{{ res.result }}</td></tr>
+                {% endfor %}
+            </table>
+        {% endif %}
+    {% elif xss_results is not none %}
+        <div class="section-skip">Aman. Payload injeksi standar tidak berhasil dieksekusi.</div>
+    {% else %}
+        <div class="section-skip">Pengujian Injeksi tidak dijalankan.</div>
+    {% endif %}
+
+    <h2>3. Server Configuration</h2>
+
+    <h3>ZAP Alerts</h3>
+    {% if zap_alerts %}
+        <table class="data-table">
+            <tr><th width="15%">Risiko</th><th width="30%">Alert</th><th width="55%">Deskripsi</th></tr>
+            {% for alert in zap_alerts %}
+            <tr>
+                <td><span class="badge bg-{{ alert.risk }}">{{ alert.risk }}</span></td>
+                <td>{{ alert.alert }}</td>
+                <td>{{ alert.description }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% elif zap_alerts is not none %}
+        <div class="section-skip">Konfigurasi Header aman (ZAP).</div>
+    {% else %}
+        <div class="section-skip">ZAP Scan tidak dijalankan.</div>
+    {% endif %}
+
+    <h3>SSL/TLS Security</h3>
+    {% if ssl_result %}
+        {% if ssl_result.weak_ciphers or ssl_result.vulnerabilities %}
+            <ul>
+            {% for item in ssl_result.weak_ciphers %}<li>{{ item }}</li>{% endfor %}
+            {% for item in ssl_result.vulnerabilities %}<li><strong style="color:red">{{ item }}</strong></li>{% endfor %}
+            </ul>
+        {% elif not ssl_result.error %}
+            <div class="section-skip">SSL Aman.</div>
+        {% else %}
+            <div style="color:red;">Gagal Scan SSL: {{ ssl_result.error }}</div>
+        {% endif %}
+    {% else %}
+        <div class="section-skip">SSL Scan tidak dijalankan.</div>
+    {% endif %}
+
+    <h3>Port Scanning (Nmap)</h3>
+    {% if nmap_result and nmap_result.open_ports %}
+        <table class="data-table">
+            <tr><th>Port</th><th>Service</th><th>Status</th><th>Saran</th></tr>
+            {% for port in nmap_result.open_ports %}
+            <tr>
+                <td><b>{{ port.port }}</b></td>
+                <td>{{ port.service }} {{ port.version }}</td>
+                <td>{{ port.state }}</td>
+                <td>{{ port.advice }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% elif nmap_result %}
+        <div class="section-skip">Tidak ada port terbuka yang terdeteksi.</div>
+    {% else %}
+        <div class="section-skip">Nmap Scan tidak dijalankan.</div>
+    {% endif %}
+
+</body>
+</html>

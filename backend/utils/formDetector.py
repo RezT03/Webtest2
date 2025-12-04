@@ -30,9 +30,9 @@ def detect_form(url):
                     })
             parameters.append(form_details)
 
-        logging.info(f"🧾 Total form ditemukan di {url}: {len(parameters)}")
+        logging.info(f"Total form ditemukan di {url}: {len(parameters)}")
         return parameters
 
     except Exception as e:
-        logging.error(f"❌ Gagal ekstrak form: {e}")
+        logging.error(f"Gagal ekstrak form: {e}")
         return []

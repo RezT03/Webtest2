@@ -128,7 +128,7 @@ def run_rate_limit_test(target_url, level=1):
     error_rate = stats["error"] / cfg["count"]
     reset_count = stats["codes"].get("Reset", 0)
     
-    summary = f"Dikirim {cfg['count']} request dalam {duration:.2f}s. "
+    summary = f"Dikirim {cfg['count']} request dalam {duration:.2f} detik. "
     
     # KASUS 1: Diblokir Eksplisit (Ideal)
     if is_explicitly_blocked:

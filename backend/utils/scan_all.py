@@ -8,8 +8,10 @@ import concurrent.futures
 import time
 import requests
 from urllib.parse import urlparse
+import traceback
 
 # --- TRICK: REDIRECT STDOUT TO STDERR GLOBALLY ---
+# Agar output print() biasa tidak mengotori hasil JSON di akhir
 original_stdout = sys.stdout
 sys.stdout = sys.stderr
 
@@ -58,7 +60,7 @@ def normalize_targets(raw_input):
 
     return zap_target, nmap_target
 
-# --- WRAPPERS ---
+# --- WRAPPERS (Jembatan ke Modul Lain) ---
 def run_nmap_scan(nmap_host, nmap_params):
     logger.info(f"[NMAP] Target: {nmap_host}")
     try:
@@ -126,181 +128,147 @@ def run_zap(target_url):
         logger.error(f"ZAP/Custom Error: {e}")
     return {'zap_alerts': all_alerts}
 
-# --- SCORING FUNCTIONS ---
-def cvss_to_score(cvss_list):
-    if not cvss_list: return 100
+def run_ssl_scan_wrapper(target_url):
+    """Wrapper untuk run_ssl_scan dengan logging dan fallback error object"""
+    logger.info(f"[SSL WRAPPER] start -> {target_url}")
     try:
-        max_cvss = max(cvss_list)
-        return max(0, 100 - (max_cvss * 10))
-    except: return 100
+        # pastikan run_ssl_scan tersedia
+        if 'run_ssl_scan' not in globals() or run_ssl_scan is None:
+            raise RuntimeError("run_ssl_scan function not available")
+        res = run_ssl_scan(target_url)
+        logger.info(f"[SSL WRAPPER] success -> type={type(res)}")
+        # normalisasi: pastikan dict
+        if res is None:
+            return {"error": "No result (None)"}
+        if not isinstance(res, dict):
+            return {"result": res}
+        return res
+    except Exception as e:
+        logger.error(f"[SSL WRAPPER] exception: {e}")
+        logger.error(traceback.format_exc())
+        return {"error": f"SSL scan failed: {str(e)}"}
 
-def zap_to_score(alerts, ssl_data=None):
-    score = 100
-    has_high = False
-    has_medium = False
-    
-    if alerts:
-        for a in alerts:
-            risk = str(a.get('risk', '')).lower()
-            if 'high' in risk or 'critical' in risk: has_high = True
-            if 'medium' in risk: has_medium = True
-            
-    if ssl_data and isinstance(ssl_data, dict):
-        issues = (ssl_data.get('weak_ciphers') or []) + (ssl_data.get('vulnerabilities') or [])
-        for i in issues:
-            if "Critical" in i or "High" in i or "ROBOT" in i or "Heartbleed" in i: has_high = True
-            elif "Medium" in i: has_medium = True
+# --- SCIENTIFIC SCORING FUNCTIONS (CVSS & WEAKEST LINK) ---
 
-    if has_high: return 40 
-    if has_medium: return 65 
-    return 90
-
-# --- NEW: NMAP SCORING ---
-def nmap_to_score(nmap_data):
+def normalize_risk_to_cvss(risk_level_str):
     """
-    Menurunkan skor jika ada port berisiko tinggi (Critical/High) yang terbuka.
+    Mengonversi label kualitatif (High, Medium, Low) menjadi skor kuantitatif (CVSS)
+    berdasarkan nilai representatif standar (FIRST.org).
     """
-    if not nmap_data or not nmap_data.get('open_ports'):
-        return 100 # Aman atau tidak dijalankan
-        
-    lowest_score = 100
-    
-    for p in nmap_data['open_ports']:
-        risk = p.get('risk', 'Info')
-        
-        if risk == 'Critical': 
-            # Port Database/Telnet/FTP terbuka -> Langsung D
-            return 40 
-        if risk == 'High':
-            # High Risk Port -> C
-            lowest_score = min(lowest_score, 60)
-        if risk == 'Medium':
-            # Medium Risk (HTTP 80) -> B
-            lowest_score = min(lowest_score, 75)
-            
-    return lowest_score
+    risk = str(risk_level_str).lower()
+    if 'critical' in risk: return 9.5  # Range 9.0 - 10.0
+    if 'high' in risk: return 8.0      # Range 7.0 - 8.9 (NIST High Water Mark)
+    if 'medium' in risk: return 5.5    # Range 4.0 - 6.9
+    if 'low' in risk: return 2.5       # Range 0.1 - 3.9
+    return 0.0                         # Info/None
 
-def score_to_grade(score):
-    if score is None: return "N/A"
-    try: s = float(score)
-    except: return "N/A"
-    if s >= 90: return "A"
-    if s >= 75: return "B"
-    if s >= 60: return "C"
-    if s >= 40: return "D"
-    return "F"
+def calculate_aggregated_risk(results):
+    """
+    Menggunakan prinsip 'Maximum Severity Aggregation' (The Weakest Link).
+    Skor Risiko Sistem = Skor CVSS Tertinggi yang ditemukan di komponen manapun.
+    """
+    max_severity_score = 0.0
+    findings_summary = []
 
-def analyze_impact_sentiment(results):
-    """
-    Analisis dampak berdasarkan hasil AKTUAL, bukan asumsi.
-    Jika test tidak dijalankan (None), jangan hitung ke scoring.
-    """
-    # Cek apa saja yang benar-benar DIJALANKAN (bukan None)
-    tests_run = {
-        'tech': results.get('tech') is not None,
-        'cves': results.get('cves') is not None,
-        'xss': results.get('xss_results') is not None,
-        'sqli': results.get('sqli_results') is not None,
-        'zap': results.get('zap_alerts') is not None,
-        'ssl': results.get('ssl_result') is not None,
-        'nmap': results.get('nmap_result') is not None,
-        'ratelimit': results.get('ratelimit_result') is not None,
-    }
-    
-    # Jika SEMUA test None -> tidak ada yang dijalankan
-    if not any(tests_run.values()):
-        return "TIDAK ADA TEST DIJALANKAN"
-    
-    score = 0
-    findings = []
-    
-    # 1. INJECTION (XSS + SQLi)
-    xss_count = len(results.get('xss_results') or []) if results.get('xss_results') is not None else 0
-    sqli_count = len(results.get('sqli_results') or []) if results.get('sqli_results') is not None else 0
-    if xss_count > 0:
-        score += 50
-        findings.append(f"XSS: {xss_count} vulnérabilité(s)")
-    if sqli_count > 0:
-        score += 50
-        findings.append(f"SQLi: {sqli_count} vulnérabilité(s)")
-    
-    # 2. CVE (Software Vulnerability)
+    # 1. Analisis CVE (NVD) - Sudah berupa angka CVSS
     cves = results.get('cves') or []
-    if cves is not None and len(cves) > 0:
-        critical_cves = [c for c in cves if c.get('cvss_score', 0) >= 9]
-        high_cves = [c for c in cves if 7 <= c.get('cvss_score', 0) < 9]
-        medium_cves = [c for c in cves if 4 <= c.get('cvss_score', 0) < 7]
-        
-        if critical_cves:
-            score += 30
-            findings.append(f"CVE Critical: {len(critical_cves)}")
-        if high_cves:
-            score += 15
-            findings.append(f"CVE High: {len(high_cves)}")
-        if medium_cves:
-            score += 5
-            findings.append(f"CVE Medium: {len(medium_cves)}")
-    
-    # 3. ZAP (Configuration & Headers)
+    if cves:
+        for cve in cves:
+            try:
+                score = float(cve.get('cvss_score', 0))
+                if score > max_severity_score:
+                    max_severity_score = score
+            except: pass
+        if max_severity_score > 0:
+            findings_summary.append(f"Software Vulnerability (CVE Max: {max_severity_score})")
+
+    # 2. Analisis ZAP Alerts - Konversi Kualitatif ke Kuantitatif
     zap_alerts = results.get('zap_alerts') or []
-    if zap_alerts is not None and len(zap_alerts) > 0:
-        high_alerts = [a for a in zap_alerts if 'high' in str(a.get('risk', '')).lower()]
-        medium_alerts = [a for a in zap_alerts if 'medium' in str(a.get('risk', '')).lower()]
+    if zap_alerts:
+        local_max = 0.0
+        for alert in zap_alerts:
+            risk_str = alert.get('risk', '')
+            score = normalize_risk_to_cvss(risk_str)
+            if score > local_max: local_max = score
         
-        if high_alerts:
-            score += 15
-            findings.append(f"ZAP High: {len(high_alerts)}")
-        if medium_alerts:
-            score += 5
-            findings.append(f"ZAP Medium: {len(medium_alerts)}")
-    
-    # 4. SSL/TLS
-    ssl_result = results.get('ssl_result')
-    if ssl_result is not None and isinstance(ssl_result, dict):
-        ssl_issues = (ssl_result.get('weak_ciphers') or []) + (ssl_result.get('vulnerabilities') or [])
-        if ssl_issues:
-            score += 10
-            findings.append(f"SSL Issues: {len(ssl_issues)}")
-    
-    # 5. NMAP (Port Risk)
-    nmap_result = results.get('nmap_result')
-    if nmap_result is not None and isinstance(nmap_result, dict):
-        open_ports = nmap_result.get('open_ports') or []
-        critical_ports = [p for p in open_ports if p.get('risk') == 'Critical']
-        high_ports = [p for p in open_ports if p.get('risk') == 'High']
+        if local_max > max_severity_score:
+            max_severity_score = local_max
+        if local_max > 0:
+            findings_summary.append(f"Web Vulnerability (ZAP Max Risk: {local_max})")
+
+    # 3. Analisis SSL/TLS - Hardcoded Severity berdasarkan Best Practice
+    ssl_data = results.get('ssl_result')
+    if ssl_data and isinstance(ssl_data, dict) and 'error' not in ssl_data:
+        local_max = 0.0
+        vulns = ssl_data.get('vulnerabilities', [])
+        weak_ciphers = ssl_data.get('weak_ciphers', [])
         
-        if critical_ports:
-            score += 25
-            findings.append(f"Nmap Critical Ports: {len(critical_ports)}")
-        if high_ports:
-            score += 10
-            findings.append(f"Nmap High Ports: {len(high_ports)}")
+        # Critical SSL Issues (Heartbleed, POODLE, SSLv2/3) -> CVSS 9.0+
+        for v in vulns:
+            if "SSLv2" in v or "SSLv3" in v or "Critical" in v:
+                local_max = max(local_max, 9.5)
+        
+        # Weak Configuration (TLS 1.0/1.1) -> CVSS 5.0 (Medium)
+        if not local_max and weak_ciphers:
+            local_max = max(local_max, 5.0)
+            
+        if local_max > max_severity_score:
+            max_severity_score = local_max
+        if local_max > 0:
+            findings_summary.append(f"SSL/TLS Config Issue (Score: {local_max})")
+
+    # 4. Analisis Rate Limit - Availability Impact (High)
+    rl_data = results.get('ratelimit_result')
+    if rl_data and isinstance(rl_data, dict):
+        summary = str(rl_data.get('summary', '')).upper()
+        # Jika summary mengandung kata 'RENTAN' atau 'VULNERABLE', anggap High Risk
+        if 'RENTAN' in summary or 'VULNERABLE' in summary:
+            # DoS Risk biasanya dikategorikan High (7.5) pada CVSS
+            score = 7.5
+            if score > max_severity_score:
+                max_severity_score = score
+            findings_summary.append(f"Rate Limit Vulnerability (Score: {score})")
+
+    # 5. Analisis Injection (XSS/SQLi) - High/Critical Impact
+    xss_count = len(results.get('xss_results') or [])
+    sqli_count = len(results.get('sqli_results') or [])
     
-    # 6. RATE LIMIT
-    rl_result = results.get('ratelimit_result')
-    if rl_result is not None and isinstance(rl_result, dict):
-        rl_summary = rl_result.get('summary', '').upper()
-        if 'RENTAN' in rl_summary or 'VULNERABLE' in rl_summary:
-            score += 15
-            findings.append("Rate Limit: VULNERABLE")
-    
-    # Sentiment Analysis berdasarkan score AKTUAL
-    findings_str = ", ".join(findings) if findings else "Tidak ada vulnerability ditemukan"
-    
-    if score >= 75:
-        return f"🔴 KRITIS: {findings_str}"
-    elif score >= 50:
-        return f"🟠 BERISIKO TINGGI: {findings_str}"
-    elif score >= 25:
-        return f"🟡 PERINGATAN: {findings_str}"
-    elif score >= 1:
-        return f"🔵 INFO: {findings_str}"
-    else:
-        return f"🟢 AMAN: Tidak ada isu signifikan ditemukan"
+    if xss_count > 0 or sqli_count > 0:
+        # SQLi/XSS Validated -> Critical/High
+        score = 8.5
+        if score > max_severity_score:
+            max_severity_score = score
+        findings_summary.append(f"Injection Exploit Verified (SQLi/XSS) (Score: {score})")
+
+    # 6. Analisis Nmap - Risky Ports
+    nmap_data = results.get('nmap_result')
+    if nmap_data and isinstance(nmap_data, dict):
+        open_ports = nmap_data.get('open_ports', [])
+        local_max = 0.0
+        for p in open_ports:
+            risk = p.get('risk', '')
+            if risk == 'Critical': local_max = max(local_max, 9.0)
+            elif risk == 'High': local_max = max(local_max, 7.5)
+        
+        if local_max > max_severity_score:
+            max_severity_score = local_max
+
+    return max_severity_score, list(set(findings_summary))
+
+def get_letter_grade(max_cvss_score):
+    """
+    Menentukan Nilai Huruf berdasarkan Skor Risiko Tertinggi (CVSS).
+    Makin tinggi CVSS -> Makin buruk nilai hurufnya.
+    """
+    if max_cvss_score >= 9.0: return "F"  # Critical Risk
+    if max_cvss_score >= 7.0: return "D"  # High Risk
+    if max_cvss_score >= 4.0: return "C"  # Medium Risk
+    if max_cvss_score > 0.0:  return "B"  # Low Risk
+    return "A"                            # Secure / No Findings
 
 # --- MAIN ORCHESTRATOR ---
 def main_scan(raw_url_input, args, ratelimit_level=0):
-    start_time = time.time()  # Catat waktu mulai
+    start_time = time.time()
     results = {
         'tech': None, 'cves': None, 'zap_alerts': None, 'xss_results': None, 
          'sqli_results': None, 'nmap_result': None, 'ssl_result': None, 'ratelimit_result': None
@@ -312,14 +280,16 @@ def main_scan(raw_url_input, args, ratelimit_level=0):
     # 1. Injection
     if args.xss_enabled:
         t0 = time.time()
-        inj_res = run_xss_sqli(zap_url)
-        results['xss_results'] = inj_res.get('xss_results', [])
-        results['sqli_results'] = inj_res.get('sqli_results', [])
+        try:
+            inj_res = run_xss_sqli(zap_url)
+            results['xss_results'] = inj_res.get('xss_results', [])
+            results['sqli_results'] = inj_res.get('sqli_results', [])
+        except Exception: results['xss_results'] = [] # Fail safe
         logger.info(f"[TIME] Injection: {time.time()-t0:.2f}s")
     else:
         logger.info("[SKIP] Injection disabled")
 
-    # 2. Parallel Recon
+    # 2. Parallel Recon (Tech, NMAP, SSL)
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_tech = executor.submit(run_tech_detector, zap_url) if args.tech_enabled else None
 
@@ -333,13 +303,15 @@ def main_scan(raw_url_input, args, ratelimit_level=0):
             }
             future_nmap = executor.submit(run_nmap_scan, nmap_host, nmap_params)
 
-        future_ssl = executor.submit(run_ssl_scan, zap_url) if args.ssl_enabled else None
+        # gunakan wrapper agar exception tertangkap dan hasil selalu ter-set
+        future_ssl = executor.submit(run_ssl_scan_wrapper, zap_url) if args.ssl_enabled else None
 
-        # Collect
+        # Collect results
         tech_list = []
         if future_tech:
             tech_data = future_tech.result()
             tech_list = tech_data.get('tech', [])
+            results['tech'] = tech_list
 
         if future_nmap:
             nmap_data = future_nmap.result().get('nmap_result')
@@ -351,25 +323,33 @@ def main_scan(raw_url_input, args, ratelimit_level=0):
                         if svc_str not in tech_list: tech_list.append(svc_str)
 
         if future_ssl:
-            ssl_data = future_ssl.result()
-            results['ssl_result'] = ssl_data
-    # 3. CVE
-    results['tech'] = tech_list
-    # CVE: hanya jalankan jika tech_enabled
+            logger.info("[SSL] waiting for future_ssl result...")
+            try:
+                ssl_data = future_ssl.result()
+                results['ssl_result'] = ssl_data
+                logger.info(f"[SSL] Complete: {ssl_data}")
+            except Exception as e:
+                logger.error(f"[SSL] future_ssl raised exception: {e}")
+                logger.error(traceback.format_exc())
+                results['ssl_result'] = {"error": str(e)}
+        else:
+            logger.info("[SSL] not requested / future_ssl is None")
+            results['ssl_result'] = None
+
+    # 3. CVE - only if tech_enabled
     if args.tech_enabled:
         logger.info("[CVE] Searching CVEs...")
         if tech_list:
             results['cves'] = search_cves_list(tech_list)
         else:
-            results['cves'] = []  # Tech dijalankan tapi tidak ada teknologi ditemukan
+            results['cves'] = []
     else:
-        # Tech tidak dijalankan -> CVE juga None
         results['tech'] = None
         results['cves'] = None
 
     logger.info(f"[RESULT] Tech={results['tech']}, CVE={results['cves']}")
 
-     # 4. ZAP
+    # 4. ZAP
     if args.zap_enabled:
         t0 = time.time()
         zap_res = run_zap(zap_url)
@@ -378,72 +358,69 @@ def main_scan(raw_url_input, args, ratelimit_level=0):
     else:
         logger.info("[SKIP] ZAP disabled")
 
-    # 5. Rate Limit
+    # 5. Rate Limit (DENGAN TRY-EXCEPT UNTUK MENCEGAH CRASH TOTAL)
     if ratelimit_level > 0:
         t0 = time.time()
-        results['ratelimit_result'] = run_rate_limit_test(zap_url, ratelimit_level)
+        try:
+            results['ratelimit_result'] = run_rate_limit_test(zap_url, ratelimit_level)
+        except Exception as e:
+            logger.error(f"Rate Limit Failed: {e}")
+            results['ratelimit_result'] = {"error": f"Test Gagal: {str(e)}", "summary": "Gagal Menjalankan Tes"}
         logger.info(f"[TIME] Rate Limit: {time.time()-t0:.2f}s")
     else:
         logger.info("[SKIP] Rate Limit disabled")
 
-    # --- SCORING FINAL ---
-    
-    # A. Score CVE
-    final_cve_score = None
-    if results['cves'] is not None:
-        cvss_list = [cve.get("cvss_score") for cve in results['cves'] if cve.get("cvss_score") is not None]
-        final_cve_score = cvss_to_score(cvss_list)
+    # --- SCORING FINAL (SCIENTIFIC APPROACH) ---
+    try:
+        # Hitung Agregasi Risiko (Prinsip Weakest Link)
+        max_risk, risk_drivers = calculate_aggregated_risk(results)
+        
+        # Hitung Nilai Kesehatan Sistem (Skala 0 - 100)
+        # Rumus Inverse: 100 - (CVSS Tertinggi * 10). 
+        # Contoh: Jika ada Critical (9.5), Health = 100 - 95 = 5.
+        health_score = max(0, 100 - (max_risk * 10))
+        
+        # Tentukan Huruf Mutu (A-F)
+        final_grade = get_letter_grade(max_risk)
 
-    # B. Score Config (ZAP + SSL + Nmap)
-    final_zap_score = None
-    # PERBAIKAN: Cek apakah ada test config yang BENAR-BENAR dijalankan
-    config_tests_run = (
-        results['zap_alerts'] is not None or 
-        results['ssl_result'] is not None or 
-        results['nmap_result'] is not None
-    )
-    if config_tests_run:
-        score_base = zap_to_score(results['zap_alerts'], results['ssl_result'])
-        score_nmap = nmap_to_score(results['nmap_result'])
-        final_zap_score = min(score_base, score_nmap)
+        results['security_score'] = {
+            "max_risk_cvss": round(max_risk, 1),
+            "health_score_100": int(health_score),
+            "final_score": final_grade, # INI YANG DIBACA FRONTEND SEBAGAI GRADE
+            "risk_drivers": risk_drivers
+        }
+        
+        # Human Readable Summary (Updated Format)
+        risk_str = f"{max_risk:.1f}"
+        
+        # Format: "Skor Akhir: 9.8 (Grade F). ..."
+        summary_text = f"Skor Akhir: {risk_str} (Grade {final_grade}). "
+        
+        if risk_drivers: 
+            summary_text += f"Ditemukan risiko tertinggi dengan skor CVSS {risk_str}. Faktor Utama: {', '.join(risk_drivers[:3])}"
+        else: 
+            summary_text += "Sistem relatif aman. Tidak ditemukan kerentanan signifikan."
 
-    # C. Final Aggregation
-    valid_scores = []
-    if final_cve_score is not None: valid_scores.append(final_cve_score)
-    if final_zap_score is not None: valid_scores.append(final_zap_score)
-    
-    if valid_scores:
-        final_num = min(valid_scores)
-        final_grade = score_to_grade(final_num)
-    else:
-        final_grade = "N/A"
+        results['impact_analysis'] = {
+            "label": final_grade,
+            "summary": summary_text
+        }
 
-    results['security_score'] = {
-        "cve_score": score_to_grade(final_cve_score) if final_cve_score is not None else "N/A",
-        "zap_score": score_to_grade(final_zap_score) if final_zap_score is not None else "N/A",
-        "final_score": final_grade
-    }
-    
-    # Metadata Status
-    impact_label = analyze_impact_sentiment(results)
-    count_zap = len(results['zap_alerts'] or []) if results['zap_alerts'] is not None else 0
-    count_cve = len(results['cves'] or [])
-    count_xss = len(results['xss_results'] or [])
-    count_sqli = len(results['sqli_results'] or [])
-    total_findings = count_zap + count_cve + count_xss + count_sqli
-    
-    # Tambahkan temuan Nmap critical ke total findings
-    if results.get('nmap_result') and results['nmap_result'].get('open_ports'):
-        for p in results['nmap_result']['open_ports']:
-             if p.get('risk') in ['Critical', 'High']: total_findings += 1
+    except Exception as e:
+        logger.error(f"Scoring Error: {e}")
+        logger.error(traceback.format_exc())
+        # Fallback jika scoring gagal agar tidak 'undefined' di frontend
+        results['security_score'] = {
+            "final_score": "ERR",
+            "max_risk_cvss": 0,
+            "health_score_100": 0
+        }
+        results['impact_analysis'] = {"summary": f"Gagal menghitung skor: {str(e)}"}
 
-    results['impact_analysis'] = {
-        "label": impact_label,
-        "summary": f"Total {total_findings} temuan signifikan. Status Akhir: {impact_label}"
-    }
-
-    try: shutdown_zap()
-    except: pass
+    try: 
+        shutdown_zap()
+    except: 
+        pass
 
     elapsed_sec = time.time() - start_time
     if elapsed_sec < 60:
@@ -458,10 +435,11 @@ def main_scan(raw_url_input, args, ratelimit_level=0):
         'execution_time_seconds': elapsed_sec
     }
     
+    # Kembalikan output ke stdout asli untuk dicetak sebagai JSON bersih
     sys.stdout = original_stdout
     print(json.dumps(results, indent=2, ensure_ascii=False))
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('url')
     parser.add_argument('--tech_enabled', action='store_true')
@@ -475,7 +453,6 @@ if __name__ == '__main__':
     parser.add_argument('--nmap_show_service', action='store_true')
     parser.add_argument('--ratelimit_level', type=int, default=0) 
     parser.add_argument('--cookie', type=str, default='')
-    # Dummy args
     parser.add_argument('--dos_enabled', action='store_true') 
     parser.add_argument('--requests_num', type=str) 
     parser.add_argument('--duration', type=str) 
@@ -485,6 +462,12 @@ if __name__ == '__main__':
     parser.add_argument('--sod', action='store_true') 
 
     args = parser.parse_args()
-    if args.dos_enabled and args.ratelimit_level == 0: args.ratelimit_level = 1
+    
+    logger.info(f"[DEBUG] sys.argv: {sys.argv}")
+    logger.info(f"[DEBUG] parsed args: {args}")
+    logger.info(f"[DEBUG] ssl_enabled: {args.ssl_enabled}")
+    
+    if args.dos_enabled and args.ratelimit_level == 0: 
+        args.ratelimit_level = 1
 
     main_scan(args.url, args, ratelimit_level=args.ratelimit_level)

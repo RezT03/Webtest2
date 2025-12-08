@@ -42,6 +42,11 @@
             <version>10</version>
         </addon>
         <addon>
+            <id>ascanrules</id>
+            <fullversion>77.0.0</fullversion>
+            <version>77</version>
+        </addon>
+        <addon>
             <id>tips</id>
             <fullversion>15.0.0</fullversion>
             <version>15</version>
@@ -78,11 +83,6 @@
             <id>scanpolicies</id>
             <fullversion>0.6.0</fullversion>
             <version>0</version>
-        </addon>
-        <addon>
-            <id>ascanrules</id>
-            <fullversion>75.0.0</fullversion>
-            <version>75</version>
         </addon>
         <addon>
             <id>spider</id>

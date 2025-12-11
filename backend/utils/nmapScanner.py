@@ -40,7 +40,7 @@ def run_nmap(
     _ensure_nmap_installed()
 
     # FIX: HAPUS "--open" agar closed/filtered tetap tampil
-    cmd = ["nmap", "-T4", "-Pn", "-n", "--max-retries", "1", "-oX", "-"] 
+    cmd = ["nmap", "-T3", "--max-retries", "1", "-oX", "-"] 
     
     cmd += _build_port_arg(ports_option, specific_ports)
 

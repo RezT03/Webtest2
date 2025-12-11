@@ -1,0 +1,119 @@
+Ringkasan Aplikasi (Executive Summary)
+Nama Sistem: Dashboard Audit Keamanan Web Terintegrasi (Integrated Web Security Audit Dashboard).
+
+Deskripsi: Aplikasi ini adalah alat pengujian keamanan aplikasi web (Dynamic Application Security Testing - DAST) yang dirancang dengan arsitektur Hybrid-Modular. Aplikasi ini menggabungkan kecepatan pemindaian pasif dan kedalaman pemindaian aktif dalam satu antarmuka berbasis web yang ringan.
+
+Keunggulan Utama (Novelty):
+
+Efisiensi Sumber Daya: Menggunakan teknik orchestration Python untuk memanggil alat-alat berat (ZAP, Nmap) hanya saat dibutuhkan, dan menggantikan browser automation berat (Selenium) dengan DrissionPage yang jauh lebih ringan. Mampu berjalan optimal di lingkungan terbatas (WSL 2GB RAM).
+
+Multi-Layer Scanning: Menggabungkan 5 mesin pemindai sekaligus:
+
+Reconnaissance: Nmap (Port & Service Discovery dengan Bypass WAF).
+
+Vulnerability Assessment: Tech Detector + NVD CVE Lookup (Mencocokkan versi software dengan database kerentanan).
+
+Configuration Audit: SSLyze (Analisis SSL/TLS) & ZAP Passive (Header Security).
+
+Injection Testing: Custom Python Script untuk XSS & SQLi (Payload ringan).
+
+Resilience Testing: Rate Limit Tester (Analisis ketahanan server terhadap flooding dengan deteksi WAF cerdas).
+
+Pelaporan Otomatis: Menghasilkan laporan PDF profesional yang berisi ringkasan eksekutif, skor keamanan (A-F), dan detail teknis.
+
+Lokalisasi: Fitur penerjemahan otomatis hasil scan ke Bahasa Indonesia menggunakan AI (LibreTranslate) untuk memudahkan administrator lokal.
+
+2. Panduan Flowchart (Alur Sistem)
+Untuk diagram alur (Flowchart), Anda bisa membaginya menjadi dua bagian utama:
+
+A. Flowchart Utama (Proses Bisnis):
+
+Start -> User membuka Dashboard.
+
+Input -> User memasukkan Target URL & Memilih Opsi Test (Nmap, ZAP, dll).
+
+Process -> Node.js menerima request -> Memvalidasi Input -> Menjalankan spawn proses Python (scan_all.py).
+
+Sub-Process (Python):
+
+Normalisasi URL.
+
+Paralel Execution: Menjalankan Tech Detect, Nmap, dan SSL secara bersamaan (Threading).
+
+Sequential Execution: Menjalankan ZAP dan Rate Limit (untuk menjaga stabilitas server target).
+
+Aggregation: Mengumpulkan semua hasil JSON -> Menghitung Skor (Scoring Logic).
+
+Output -> Python mencetak JSON -> Node.js mengirim JSON ke Frontend.
+
+Display -> Frontend merender hasil (Tabel, Badge, Score Card).
+
+Action -> User klik "Download PDF" -> Backend generate PDF -> Download.
+
+End.
+
+B. Flowchart Logika Rate Limit (Contoh Logika Cerdas):
+
+Start Test -> Kirim N Request secara paralel.
+
+Hitung Response Code.
+
+Decision: Apakah ada kode 429/403?
+
+Yes: Status = AMAN (Blocked).
+
+No: Cek Error Rate.
+
+Decision: Apakah Error Rate > 50%?
+
+Yes: Jalankan Diagnosa curl.
+
+Jika curl Reset/Gagal -> Status = AMAN (Firewall Block).
+
+Jika curl Sukses -> Status = BERISIKO (Server Overload).
+
+No: Status = RENTAN (No Protection).
+
+Return Result.
+
+3. Panduan Use Case Diagram
+Aktor:
+
+Security Auditor / Admin (Pengguna Utama).
+
+Use Cases (Lingkaran):
+
+Melakukan Konfigurasi Scan: Memilih target URL, memasukkan cookie sesi, memilih jenis tes (Nmap, ZAP, SSL, dll).
+
+Menjalankan Scanning: Memicu proses audit otomatis.
+
+Monitoring Progress: Melihat status progress bar dan estimasi waktu.
+
+Melihat Hasil (Dashboard): Melihat visualisasi skor, daftar CVE, tabel port, dan alert keamanan.
+
+Menerjemahkan Hasil: Menggunakan fitur translasi ke Bahasa Indonesia.
+
+Generate Laporan: Mengunduh hasil audit dalam format PDF.
+
+4. Panduan ERD (Entity Relationship Diagram)
+Meskipun saat ini aplikasi berjalan stateless (langsung proses tanpa simpan database permanen), untuk keperluan skripsi (Bab Perancangan), Anda bisa menggambarkan struktur data yang digunakan atau rencana database masa depan.
+
+Entitas (Tabel):
+
+ScanRequest (Data Input)
+
+Attributes: target_url, scan_options (JSON), cookie, timestamp.
+
+ScanResult (Data Output)
+
+Attributes: scan_id, scan_date, final_score, duration.
+
+Relations: Memiliki banyak Vulnerability.
+
+Vulnerability (Detail Temuan)
+
+Attributes: vuln_type (CVE/ZAP/Nmap), severity (Critical/High/Medium/Low), description, solution.
+
+TargetProfile (Profil Website)
+
+Attributes: domain, ip_address, os_detected, server_software.

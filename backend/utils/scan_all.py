@@ -151,22 +151,15 @@ def run_ssl_scan_wrapper(target_url):
 # --- SCIENTIFIC SCORING FUNCTIONS (CVSS & WEAKEST LINK) ---
 
 def normalize_risk_to_cvss(risk_level_str):
-    """
-    Mengonversi label kualitatif (High, Medium, Low) menjadi skor kuantitatif (CVSS)
-    berdasarkan nilai representatif standar (FIRST.org).
-    """
+
     risk = str(risk_level_str).lower()
-    if 'critical' in risk: return 9.5  # Range 9.0 - 10.0
-    if 'high' in risk: return 8.0      # Range 7.0 - 8.9 (NIST High Water Mark)
-    if 'medium' in risk: return 5.5    # Range 4.0 - 6.9
-    if 'low' in risk: return 2.5       # Range 0.1 - 3.9
-    return 0.0                         # Info/None
+    if 'critical' in risk: return 9.5  
+    if 'high' in risk: return 8.0     
+    if 'medium' in risk: return 5.5    
+    if 'low' in risk: return 2.5       
+    return 0.0                        
 
 def calculate_aggregated_risk(results):
-    """
-    Menggunakan prinsip 'Maximum Severity Aggregation' (The Weakest Link).
-    Skor Risiko Sistem = Skor CVSS Tertinggi yang ditemukan di komponen manapun.
-    """
     max_severity_score = 0.0
     findings_summary = []
 
@@ -223,7 +216,6 @@ def calculate_aggregated_risk(results):
         summary = str(rl_data.get('summary', '')).upper()
         # Jika summary mengandung kata 'RENTAN' atau 'VULNERABLE', anggap High Risk
         if 'RENTAN' in summary or 'VULNERABLE' in summary:
-            # DoS Risk biasanya dikategorikan High (7.5) pada CVSS
             score = 7.5
             if score > max_severity_score:
                 max_severity_score = score
@@ -303,7 +295,6 @@ def main_scan(raw_url_input, args, ratelimit_level=0):
             }
             future_nmap = executor.submit(run_nmap_scan, nmap_host, nmap_params)
 
-        # gunakan wrapper agar exception tertangkap dan hasil selalu ter-set
         future_ssl = executor.submit(run_ssl_scan_wrapper, zap_url) if args.ssl_enabled else None
 
         # Collect results

@@ -132,7 +132,7 @@ def run_rate_limit_test(target_url, level=1):
     
     # KASUS 1: Diblokir Eksplisit (Ideal)
     if is_explicitly_blocked:
-        summary += f"**AMAN:** Server/WAF memblokir {stats['blocked']} request (HTTP 429/403)."
+        summary += f"**AMAN:** Server/WAF memblokir {stats['blocked']} request"
     
     # KASUS 2: Diblokir Kasar (Connection Reset)
     elif reset_count > (cfg["count"] * 0.5):
